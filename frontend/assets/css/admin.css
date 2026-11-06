@@ -1,0 +1,1168 @@
+
+/* =========================================================
+   KANAAN ADMIN DASHBOARD
+   RTL / LTR Responsive Stylesheet
+   ========================================================= */
+
+/* ===================== 1. ROOT & RESET ===================== */
+
+:root {
+    --ink: #25281f;
+    --olive: #34442c;
+    --olive2: #566b45;
+    --red: #9d3d32;
+    --muted: #77776c;
+    --line: #e3e6de;
+    --bg: #f3f5f0;
+    --card: #fff;
+
+    --sans: 'Cairo', Arial, sans-serif;
+    --serif: 'Playfair Display', 'Amiri', Georgia, serif;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body.admin-body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.7;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+img {
+    display: block;
+    max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+    color: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+:focus-visible {
+    outline: 2px solid var(--olive2);
+    outline-offset: 2px;
+}
+
+.eyebrow {
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    color: var(--red);
+}
+
+
+/* ===================== 2. ADMIN LAYOUT ===================== */
+
+.admin-shell {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    min-height: 100vh;
+}
+
+.admin-main {
+    min-width: 0;
+    padding: 30px 34px;
+}
+
+
+/* ===================== 3. SIDEBAR ===================== */
+
+.admin-sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: auto;
+    padding: 26px 18px;
+    background: #263321;
+    color: #e9e6dc;
+}
+
+.admin-sidebar .brand {
+    margin-bottom: 26px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.brand-mark {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: #e8d5bd;
+    color: #263321;
+    font: 700 22px var(--serif);
+}
+
+.brand b {
+    display: block;
+    color: #fff;
+    font: 700 17px var(--serif);
+    letter-spacing: .14em;
+    line-height: 1.2;
+}
+
+.brand small {
+    display: block;
+    color: #b8c2ad;
+    font-size: 11px;
+}
+
+.admin-profile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    padding: 14px;
+    border-radius: 8px;
+    background: #34432f;
+}
+
+.admin-profile b {
+    display: block;
+    font-size: 14px;
+    line-height: 1.3;
+}
+
+.admin-profile small {
+    color: #adb8a3;
+    font-size: 12px;
+}
+
+.avatar {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: #e8d5bd;
+    color: #263321;
+    font-weight: 800;
+}
+
+.side-label {
+    display: block;
+    margin: 22px 10px 8px;
+    color: #91a087;
+    font-size: 11px;
+    letter-spacing: .12em;
+}
+
+.side-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 2px 0;
+    padding: 11px 13px;
+    border-radius: 6px;
+    color: #d7ddcf;
+    font-size: 14px;
+    transition: background .2s;
+}
+
+.side-link:hover,
+.side-link.active {
+    background: #43543b;
+    color: #fff;
+}
+
+.si {
+    width: 20px;
+    text-align: center;
+    opacity: .85;
+}
+
+.side-back {
+    margin-top: 26px;
+    padding-top: 18px;
+    border-top: 1px solid #465440;
+    border-radius: 0;
+}
+
+
+/* ===================== 4. HEADER & BUTTONS ===================== */
+
+.admin-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 26px;
+}
+
+.admin-top h1 {
+    margin: 2px 0 0;
+    color: #2d3c28;
+    font: 600 clamp(24px, 3vw, 32px)/1.2 var(--serif);
+}
+
+.a-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.a-burger {
+    display: none;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    font-size: 20px;
+}
+
+.a-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 18px;
+    border: 1.5px solid transparent;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    transition: background .2s, transform .15s;
+}
+
+.a-btn:hover {
+    transform: translateY(-1px);
+}
+
+.a-btn-primary {
+    background: var(--olive);
+    color: #fff;
+}
+
+.a-btn-primary:hover {
+    background: var(--olive2);
+}
+
+.a-btn-light {
+    border-color: var(--line);
+    color: var(--olive);
+}
+
+.a-btn-light:hover {
+    background: #eef1e9;
+}
+
+.a-btn-sm {
+    padding: 5px 12px;
+    border-color: var(--line);
+    font-size: 12px;
+}
+
+.a-btn-del {
+    color: #b03a2e;
+}
+
+.a-btn-del:hover {
+    background: #f8e2de;
+}
+
+.a-block {
+    width: 100%;
+}
+
+.a-link {
+    color: var(--red);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+
+/* ===================== 5. DASHBOARD STATISTICS ===================== */
+
+.a-loading {
+    padding: 80px 0;
+    color: var(--muted);
+    text-align: center;
+}
+
+.a-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 22px;
+}
+
+.a-stat {
+    padding: 22px;
+    border: 1px solid var(--line);
+    border-inline-start: 4px solid var(--olive2);
+    border-radius: 10px;
+    background: var(--card);
+    transition: box-shadow .2s;
+}
+
+.a-stat:hover {
+    box-shadow: 0 10px 24px rgba(38, 45, 31, .1);
+}
+
+.a-stat small {
+    display: block;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.a-stat strong {
+    display: block;
+    color: #2e3b28;
+    font: 600 30px var(--serif);
+}
+
+.a-cols {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    align-items: start;
+    gap: 20px;
+}
+
+
+/* ===================== 6. PANELS & LISTS ===================== */
+
+.a-panel {
+    min-width: 0;
+    margin-bottom: 20px;
+    padding: 24px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+}
+
+.a-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.a-panel h2 {
+    margin: 0;
+    color: #30402a;
+    font: 600 20px var(--serif);
+}
+
+.a-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.a-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 14px;
+}
+
+.bad {
+    color: #b03a2e;
+    font-weight: 800;
+}
+
+.a-empty {
+    padding: 24px;
+    color: var(--muted);
+    text-align: center;
+}
+
+.a-hint {
+    margin: 12px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+
+/* ===================== 7. TABLES & SEARCH ===================== */
+
+.a-table {
+    overflow: auto;
+}
+
+.a-table table {
+    width: 100%;
+    min-width: 560px;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.a-table th {
+    padding: 11px 12px;
+    background: #eef1e9;
+    color: #35442e;
+    text-align: start;
+    white-space: nowrap;
+}
+
+.a-table td {
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+}
+
+.a-table tr:hover td {
+    background: #fafbf8;
+}
+
+.a-thumb {
+    width: 64px;
+}
+
+.a-thumb img {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    object-fit: cover;
+}
+
+.a-acts {
+    display: flex;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.a-search {
+    width: 100%;
+    max-width: 340px;
+    margin-bottom: 14px;
+    padding: 10px 14px;
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+}
+
+
+/* ===================== 8. FILTER PILLS & STATUS ===================== */
+
+.a-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.a-pill {
+    padding: 6px 16px;
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    background: #fff;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.a-pill.active,
+.a-pill:hover {
+    border-color: var(--olive);
+    background: var(--olive);
+    color: #fff;
+}
+
+.a-chip {
+    display: inline-block;
+    padding: 2px 12px;
+    border-radius: 999px;
+    background: #eee;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.st-Pending {
+    background: #fdf0cf;
+    color: #7a5a00;
+}
+
+.st-Processing {
+    background: #dde9f7;
+    color: #1f4a7c;
+}
+
+.st-Shipped {
+    background: #e7defa;
+    color: #4b2f8a;
+}
+
+.st-Delivered {
+    background: #dcf1e1;
+    color: #1d6b35;
+}
+
+.st-Cancelled {
+    background: #f8dedb;
+    color: #9d2f24;
+}
+
+
+/* ===================== 9. FORMS & INPUTS ===================== */
+
+.a-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 20px;
+}
+
+.a-form .wide {
+    grid-column: 1 / -1;
+}
+
+.a-f {
+    display: block;
+    margin-bottom: 16px;
+}
+
+.a-f > span {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.a-f input:not([type=file]),
+.a-f select,
+.a-f textarea,
+.a-table select {
+    width: 100%;
+    padding: 11px 13px;
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    outline: none;
+}
+
+.a-table select {
+    width: auto;
+    padding: 6px 10px;
+}
+
+.a-f input:focus,
+.a-f select:focus,
+.a-f textarea:focus {
+    border-color: var(--olive2);
+}
+
+
+/* ===================== 10. IMAGE UPLOAD & PREVIEW ===================== */
+
+.a-upload {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.a-preview {
+    width: 120px;
+    height: 120px;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: 10px;
+    background: #eef1e9;
+}
+
+.a-preview.sm {
+    width: 72px;
+    height: 72px;
+}
+
+.a-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.a-upload small {
+    display: block;
+    margin-top: 6px;
+    color: var(--muted);
+}
+
+.a-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.a-msg {
+    min-height: 22px;
+    margin-bottom: 10px;
+    color: #b03a2e;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.a-row {
+    display: flex;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 16px;
+}
+
+.a-row .a-f {
+    min-width: 170px;
+    margin: 0;
+}
+
+
+/* ===================== 11. CARDS & GALLERY ===================== */
+
+.a-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 16px;
+}
+
+.a-card {
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fafbf8;
+}
+
+.a-card h3 {
+    margin: 0 0 6px;
+    font: 600 18px var(--serif);
+}
+
+.a-card p {
+    margin: 0 0 8px;
+    color: #5c6454;
+    font-size: 14px;
+}
+
+.a-card small {
+    color: var(--muted);
+}
+
+.a-imgs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 16px;
+}
+
+.a-img {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.a-img-box {
+    overflow: hidden;
+    aspect-ratio: 1;
+    border-radius: 10px;
+    background: #eef1e9;
+}
+
+.a-img-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+
+/* ===================== 12. MODALS & TOAST ===================== */
+
+.a-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: grid;
+    place-items: center;
+    overflow: auto;
+    padding: 20px;
+    background: rgba(20, 28, 18, .55);
+}
+
+.a-modal-box {
+    position: relative;
+    width: min(720px, 100%);
+    max-height: 92vh;
+    overflow: auto;
+    padding: 30px;
+    border-radius: 12px;
+    background: #fff;
+}
+
+.a-modal-box h2 {
+    margin: 0 0 16px;
+    color: #2d3c28;
+    font: 600 24px var(--serif);
+}
+
+.a-x {
+    position: absolute;
+    inset-block-start: 10px;
+    inset-inline-end: 14px;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font-size: 30px;
+    line-height: 1;
+}
+
+.a-dl {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 20px;
+    margin: 0 0 18px;
+}
+
+.a-dl .wide {
+    grid-column: 1 / -1;
+}
+
+.a-dl dt {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.a-dl dd {
+    margin: 0;
+    font-weight: 700;
+}
+
+.a-sum {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding: 14px 0;
+    border-top: 2px solid var(--ink);
+    font: 700 20px var(--serif);
+}
+
+#a-toast {
+    position: fixed;
+    bottom: 26px;
+    inset-inline: 0;
+    z-index: 99;
+    width: max-content;
+    max-width: 88vw;
+    margin-inline: auto;
+    padding: 11px 22px;
+    border-radius: 999px;
+    background: #263321;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    opacity: 0;
+    transform: translateY(16px);
+    pointer-events: none;
+    transition: .3s;
+}
+
+#a-toast.show {
+    opacity: 1;
+    transform: none;
+}
+
+#a-toast.bad {
+    background: #9d3d32;
+}
+
+
+/* ===================== 13. ADMIN LOGIN GATE ===================== */
+
+.a-gate {
+    display: grid;
+    place-items: center;
+    min-height: 100vh;
+    padding: 20px;
+    background: linear-gradient(160deg, #263321, #3f5236);
+}
+
+.a-gate-card {
+    position: relative;
+    width: min(430px, 100%);
+    padding: 36px;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, .3);
+}
+
+.a-gate-card .brand {
+    margin-bottom: 20px;
+    color: var(--olive);
+}
+
+.a-gate-card .brand b {
+    color: var(--olive);
+}
+
+.a-gate-card .brand small {
+    color: var(--muted);
+}
+
+.a-gate-card .brand-mark {
+    background: var(--olive);
+    color: #fff;
+}
+
+.a-gate-card h1 {
+    margin: 0 0 4px;
+    color: #2d3c28;
+    font: 600 28px var(--serif);
+}
+
+.a-gate-card p {
+    margin: 0 0 20px;
+    color: var(--muted);
+}
+
+.a-gate-lang {
+    position: absolute;
+    inset-block-start: 16px;
+    inset-inline-end: 16px;
+    padding: 5px 12px;
+}
+
+
+/* ===================== 14. REVENUE CHART ===================== */
+
+.a-chart-panel {
+    margin: 22px 0;
+    padding: 22px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--card);
+}
+
+.a-chart-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.a-chart-head h3 {
+    margin: 0;
+    font-size: 17px;
+}
+
+.a-chart-head span {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.a-bars {
+    display: flex;
+    align-items: stretch;
+    gap: clamp(10px, 3vw, 30px);
+    height: 220px;
+    padding: 12px 8px 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.a-bar-col {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 7px;
+    min-width: 0;
+}
+
+.a-bar-value {
+    overflow: hidden;
+    max-width: 100%;
+    color: var(--muted);
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.a-bar-track {
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+    width: min(42px, 75%);
+    height: 145px;
+    border-radius: 7px 7px 0 0;
+    background: #f2eee6;
+}
+
+.a-bar-track i {
+    display: block;
+    width: 100%;
+    min-height: 4px;
+    border-radius: 7px 7px 0 0;
+    background: linear-gradient(180deg, #a8b58c, #34442c);
+}
+
+.a-bar-col small {
+    color: var(--muted);
+    font-size: 10px;
+    direction: ltr;
+}
+
+
+/* ===================== 15. CUSTOMER PROFILES ===================== */
+
+.a-user-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 150px;
+}
+
+.a-user-cell img,
+.a-user-avatar {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.a-user-avatar {
+    display: grid;
+    place-items: center;
+    background: #e9e3d6;
+    color: #34442c;
+    font-weight: 800;
+}
+
+.a-user-gallery {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.a-user-gallery figure {
+    min-width: 0;
+    margin: 0;
+}
+
+.a-user-gallery img {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 9px;
+    background: #eee;
+    object-fit: cover;
+}
+
+.a-user-gallery figcaption {
+    padding-top: 5px;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+
+/* ===================== 16. DELETE CONFIRMATION POPUP ===================== */
+
+.a-confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(25, 32, 22, .58);
+    backdrop-filter: blur(5px);
+    animation: confirmFade .2s ease;
+}
+
+.a-confirm-box {
+    width: min(420px, 100%);
+    padding: 32px;
+    border-radius: 16px;
+    background: #fff;
+    text-align: center;
+    box-shadow: 0 25px 80px rgba(0, 0, 0, .2);
+    animation: confirmUp .25s ease;
+}
+
+.a-confirm-icon {
+    display: grid;
+    place-items: center;
+    width: 66px;
+    height: 66px;
+    margin: 0 auto 18px;
+    border-radius: 50%;
+    background: #fbe9e6;
+    color: #a33c30;
+    font-size: 29px;
+}
+
+.a-confirm-box h3 {
+    margin: 0 0 8px;
+    color: #263321;
+    font: 700 23px var(--serif);
+}
+
+.a-confirm-box p {
+    margin: 0 0 25px;
+    color: #77776c;
+    font-size: 14px;
+}
+
+.a-confirm-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.a-confirm-actions button {
+    flex: 1;
+    padding: 11px;
+    border: 0;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.a-confirm-cancel {
+    background: #f0f1ec;
+    color: #34442c;
+}
+
+.a-confirm-delete {
+    background: #9d3d32;
+    color: white;
+}
+
+.a-confirm-delete:hover {
+    background: #812e25;
+}
+
+
+/* ===================== 17. ANIMATIONS ===================== */
+
+@keyframes confirmFade {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes confirmUp {
+    from {
+        opacity: 0;
+        transform: translateY(15px) scale(.97);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+
+/* ===================== 18. RESPONSIVE DESIGN ===================== */
+
+@media (max-width: 1000px) {
+    .a-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .a-cols {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 860px) {
+    .admin-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-sidebar {
+        position: fixed;
+        inset-block: 0;
+        inset-inline-start: 0;
+        z-index: 70;
+        width: 270px;
+        height: 100%;
+        transform: translateX(-105%);
+        transition: transform .25s;
+    }
+
+    html[dir="rtl"] .admin-sidebar {
+        transform: translateX(105%);
+    }
+
+    .admin-sidebar.open {
+        transform: none !important;
+    }
+
+    .a-burger {
+        display: inline-block;
+    }
+
+    .admin-main {
+        padding: 20px 14px;
+    }
+
+    .a-form,
+    .a-dl {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .a-chart-head {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .a-bar-value {
+        font-size: 8px;
+    }
+
+    .a-bars {
+        gap: 6px;
+    }
+}
+
+@media (max-width: 520px) {
+    .a-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .a-panel {
+        padding: 16px;
+    }
+
+    .a-modal-box {
+        padding: 22px 16px;
+    }
+
+    .a-user-gallery {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
