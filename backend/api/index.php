@@ -1,7 +1,7 @@
 <?php
 /**
  * KANAAN JSON API  (frontend/api.php?action=...)
- * نسخة مبسّطة: نفس الوظائف بكود أقصر
+
  */
 require_once __DIR__ . '/../init.php';
 header('Content-Type: application/json; charset=utf-8');

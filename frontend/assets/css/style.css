@@ -1,4 +1,3 @@
-
 /* ============================================================
    KANAAN STOREFRONT
    Shared Stylesheet | RTL / LTR | Responsive
@@ -1636,6 +1635,26 @@ body[data-page="cart"] {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0 18px;
+}
+
+/* Payment method (COD only) */
+.pay-method {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    margin-bottom: 18px;
+    padding: 14px 16px;
+
+    border: 1.5px solid var(--accent);
+    border-radius: var(--r);
+
+    background: var(--alt);
+    font-size: 14px;
+}
+
+.pay-method b {
+    color: var(--accent);
 }
 
 .k-fields .wide {

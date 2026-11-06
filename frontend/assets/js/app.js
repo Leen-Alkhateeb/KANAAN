@@ -118,6 +118,7 @@ const D = {
     xS1: ['السلة', 'Cart'], xS2: ['البيانات', 'Details'], xS3: ['الملخص', 'Summary'],
     xName: ['الاسم الكامل', 'Full name'], xPhone: ['رقم الهاتف', 'Phone number'], xCity: ['المدينة', 'City'],
     xAddr: ['العنوان بالتفصيل', 'Full address'], xNotes: ['ملاحظات (اختياري)', 'Notes (optional)'],
+    xPay: ['طريقة الدفع', 'Payment method'],
     xPlace: ['تأكيد الطلب', 'Confirm order'], xErr: ['يرجى تعبئة كل الحقول المطلوبة بشكل صحيح.', 'Please fill in all required fields correctly.'],
     xSum: ['ملخص السلة', 'Cart summary'], xBack: ['العودة للسلة', 'Back to cart'],
     xLoginH: ['سجّل دخولك لإتمام الطلب', 'Sign in to place your order'],
@@ -884,6 +885,7 @@ async function vCheckout() {
                         ${field('address', t('xAddr'), { area: true, wide: true })}
                         ${field('notes', t('xNotes'), { area: true, wide: true })}
                     </div>
+                    <div class="pay-method"><span>${t('xPay')}</span><b>✓ ${t('rCod')}</b></div>
                     <div class="form-msg" id="k-msg" role="alert"></div>
                     <button class="btn btn-primary btn-block" type="submit">${t('xPlace')}${arrowSpan}</button>
                 </form>
