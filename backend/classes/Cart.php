@@ -1,100 +1,132 @@
 <?php
-/**
- * سلة المشتريات المخزّنة في الجلسة: [product_id => quantity]
- */
+
 class Cart
 {
-    /* =================================================================
-     * التعديل على السلة
-     * ================================================================= */
-
-    /** إضافة منتج للسلة (بدون ما نتجاوز المخزون). يرجّع false لو المنتج مش متوفر */
-    public static function add(int $id, int $qty = 1): bool
+    // إضافة منتج للسلة. بترجّع true لو انضاف، و false لو المنتج مش موجود أو خلص
+    public static function add(int $productId, int $quantity = 1): bool
     {
-        $st = Database::connect()->prepare('SELECT stock FROM products WHERE id = ?');
-        $st->execute([$id]);
-        $stock = $st->fetchColumn();
+        // 1) نجيب المخزون من قاعدة البيانات
+        $stmt = Database::connect()->prepare('SELECT stock FROM products WHERE id = ?');
+        $stmt->execute([$productId]);
+        $stock = $stmt->fetchColumn();
 
-        // المنتج مش موجود أو المخزون صفر
-        if ($stock === false || (int)$stock < 1) {
+        // 2) لو المنتج مش موجود أو المخزون صفر، ما نضيف
+        if ($stock === false || $stock < 1) {
             return false;
         }
 
-        // الكمية الجديدة = القديمة + المطلوبة (على الأقل 1)، وما تزيد عن المخزون
-        $cur = $_SESSION['cart'][$id] ?? 0;
-        $_SESSION['cart'][$id] = min($cur + max(1, $qty), (int)$stock);
+        // 3) الكمية اللي بالسلة حالياً (صفر لو المنتج مش موجود فيها)
+        $currentQuantity = 0;
+        if (isset($_SESSION['cart'][$productId])) {
+            $currentQuantity = $_SESSION['cart'][$productId];
+        }
+
+        // 4) نحسب الكمية الجديدة
+        if ($quantity < 1) {
+            $quantity = 1; // أقل كمية مسموحة 1
+        }
+        $newQuantity = $currentQuantity + $quantity;
+
+        // 5) ما نخلي الكمية تزيد عن المخزون
+        if ($newQuantity > $stock) {
+            $newQuantity = $stock;
+        }
+
+        $_SESSION['cart'][$productId] = $newQuantity;
         return true;
     }
 
-    /** تغيير الكمية (صفر أو أقل = حذف المنتج، والحد الأقصى 99) */
-    public static function update(int $id, int $qty): void
+    // تغيير كمية منتج موجود بالسلة
+    public static function update(int $productId, int $quantity): void
     {
-        if ($qty <= 0) {
-            self::remove($id);
+        // كمية صفر أو أقل = نحذف المنتج
+        if ($quantity <= 0) {
+            self::remove($productId);
             return;
         }
-        if (isset($_SESSION['cart'][$id])) {
-            $_SESSION['cart'][$id] = min($qty, 99);
+
+        // ما نعدّل إلا لو المنتج موجود بالسلة
+        if (isset($_SESSION['cart'][$productId])) {
+            // الحد الأقصى 99
+            if ($quantity > 99) {
+                $quantity = 99;
+            }
+            $_SESSION['cart'][$productId] = $quantity;
         }
     }
 
-    /** حذف منتج من السلة */
-    public static function remove(int $id): void
+    // حذف منتج من السلة
+    public static function remove(int $productId): void
     {
-        unset($_SESSION['cart'][$id]);
+        unset($_SESSION['cart'][$productId]);
     }
 
-    /** تفريغ السلة بالكامل */
+    // تفريغ السلة بالكامل
     public static function clear(): void
     {
         unset($_SESSION['cart']);
     }
 
-
-    /* =================================================================
-     * قراءة السلة
-     * ================================================================= */
-
-    /** مجموع عدد القطع بالسلة */
+    // مجموع عدد القطع بالسلة (مثلاً 2 + 1 = 3)
     public static function count(): int
     {
-        return array_sum($_SESSION['cart'] ?? []);
+        if (empty($_SESSION['cart'])) {
+            return 0;
+        }
+        return array_sum($_SESSION['cart']);
     }
 
-    /** عناصر السلة مع الأسعار الحقيقية من قاعدة البيانات (مش من الجلسة) */
+    // بترجّع المنتجات اللي بالسلة مع بياناتها الكاملة وأسعارها من قاعدة البيانات
     public static function items(): array
     {
-        $cart = $_SESSION['cart'] ?? [];
-        if (!$cart) {
+        // السلة فاضية؟ ما في شي نعمله
+        if (empty($_SESSION['cart'])) {
             return [];
         }
 
-        $ids = array_keys($cart);
-        $in  = implode(',', array_fill(0, count($ids), '?'));
-        $st  = Database::connect()->prepare("SELECT id, name, price, stock, image FROM products WHERE id IN ($in)");
-        $st->execute($ids);
+        $cart       = $_SESSION['cart'];
+        $productIds = array_keys($cart); // مثلاً [5, 8]
+
+        // نجهّز علامات ? بعدد المنتجات. لو عندنا 3 منتجات بتصير: ?,?,?
+        $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+
+        // نجيب كل المنتجات بطلب واحد لقاعدة البيانات
+        $sql  = "SELECT id, name, price, stock, image FROM products WHERE id IN ($placeholders)";
+        $stmt = Database::connect()->prepare($sql);
+        $stmt->execute($productIds);
+        $products = $stmt->fetchAll();
 
         $items = [];
-        foreach ($st->fetchAll() as $p) {
-            // الكمية ما تتجاوز المخزون الحالي
-            $qty = min((int)$cart[$p['id']], (int)$p['stock']);
 
-            // نفد المخزون: نشيله من السلة
-            if ($qty < 1) {
-                self::remove((int)$p['id']);
+        foreach ($products as $product) {
+            $quantity = $cart[$product['id']];
+
+            // لو الكمية أكبر من المخزون الحالي، نخفضها
+            if ($quantity > $product['stock']) {
+                $quantity = $product['stock'];
+            }
+
+            // لو المنتج خلص، نشيله من السلة وننتقل للي بعده
+            if ($quantity < 1) {
+                self::remove((int) $product['id']);
                 continue;
             }
 
-            $p['qty']      = $qty;
-            $p['subtotal'] = $qty * (float)$p['price'];
-            $items[]       = $p;
+            $product['qty']      = $quantity;
+            $product['subtotal'] = $quantity * $product['price'];
+            $items[] = $product;
         }
+
         return $items;
     }
 
-    /** مجموع سعر العناصر */
+    // مجموع سعر كل المنتجات (بنمرّر له نتيجة items())
     public static function total(array $items): float
     {
-        return array_sum(array_column($items, 'subtotal'));
+        $total = 0;
+        foreach ($items as $item) {
+            $total += $item['subtotal'];
+        }
+        return $total;
     }
 }

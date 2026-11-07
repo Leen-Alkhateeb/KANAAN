@@ -1,40 +1,46 @@
-(() => {
-'use strict';
-
 /* =====================================================================
-   KANAAN Admin — صفحة واحدة بدون إعادة تحميل، عربي / إنجليزي
-   كل الشاشات بتقرأ وتكتب بالداتابيس عن طريق api.php
+   لوحة تحكم الأدمن - نسخة مبسطة للمبتدئين
+   الفكرة: كل صفحة أدمن (dashboard.html, products.html ...) بتحمّل هاد الملف،
+   والملف بيعرف أنهي صفحة هي، وبيجيب بياناتها من السيرفر، وبيرسمها.
 ===================================================================== */
 
 
 /* =====================================================================
-   1) الإعدادات والدوال الصغيرة
+   1) إعدادات ودوال صغيرة
 ===================================================================== */
 
-const BASE = new URL('../../', document.currentScript.src).href;   // .../frontend/
-const API  = BASE + 'api.php';
-const PH   = BASE + 'assets/images/placeholder.svg';                // صورة بديلة
+const BASE = new URL('../../', document.currentScript.src).href;   // مجلد frontend
+const API = BASE + 'api.php';
+const PLACEHOLDER = BASE + 'assets/images/placeholder.svg';        // صورة بديلة
 
-const $  = (s, r = document) => r.querySelector(s);
-const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+// اختصارات: $ = عنصر واحد، $$ = كل العناصر
+function $(selector, parent = document) {
+    return parent.querySelector(selector);
+}
+function $$(selector, parent = document) {
+    return [...parent.querySelectorAll(selector)];
+}
 
-// حفظ اللغة بالمتصفح (try/catch لأن المتصفح ممكن يمنع localStorage)
-const store = {
-    get: k => { try { return localStorage.getItem(k); } catch { return null; } },
-    set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }
-};
+// حفظ/قراءة اللغة من المتصفح (try/catch لأنه ممكن المتصفح يمنع localStorage)
+function loadLang() {
+    try { return localStorage.getItem('kn_lang'); } catch (e) { return null; }
+}
+function saveLang(value) {
+    try { localStorage.setItem('kn_lang', value); } catch (e) { }
+}
 
-// الحالة العامة: اللغة والمستخدم الحالي
-const S = { lang: store.get('kn_lang') === 'en' ? 'en' : 'ar', user: null };
+let lang = loadLang() === 'en' ? 'en' : 'ar';   // اللغة الحالية
+let currentUser = null;                          // المستخدم المسجّل دخول
 
 const STATUSES = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
 
 
 /* =====================================================================
-   2) النصوص (عربي / إنجليزي)  —  المفتاح: [عربي, English]
+   2) النصوص (عربي / إنجليزي)  —  كل نص: [عربي, English]
+   هاد القسم مجرد قاموس، ما فيه منطق
 ===================================================================== */
 
-const D = {
+const TEXT = {
     /* عام */
     brandSub: ['لوحة الإدارة', 'Admin panel'],
     mMain: ['القائمة الرئيسية', 'Main menu'], mContent: ['إدارة المحتوى', 'Content'],
@@ -60,7 +66,7 @@ const D = {
     t_categories: ['التصنيفات', 'Categories'], t_orders: ['الطلبات', 'Orders'], t_users: ['المستخدمون', 'Users'],
     t_artisans: ['الحرفيون', 'Artisans'], t_images: ['صور المنتجات', 'Product images'], t_logs: ['سجل النشاطات', 'Activity log'],
 
-    /* تسجيل الدخول وإعداد أول أدمن */
+    /* تسجيل الدخول */
     gLogin: ['دخول الإدارة', 'Admin sign in'], gSetup: ['إعداد الحساب الأول', 'First-time setup'],
     gSetupP: ['لا يوجد أدمن بعد. أنشئ حساب المدير الأول لتبدأ.', 'There is no admin yet. Create the first admin account to get started.'],
     gLoginP: ['سجّل دخولك بحساب مدير.', 'Sign in with an admin account.'],
@@ -118,8 +124,12 @@ const D = {
     'a_category.update': ['تعديل تصنيف', 'Category updated'], 'a_category.delete': ['حذف تصنيف', 'Category deleted']
 };
 
-// جلب النص حسب اللغة الحالية
-const t = k => { const d = D[k]; return d ? d[S.lang === 'ar' ? 0 : 1] : k; };
+// جلب النص حسب اللغة الحالية: t('save') => "حفظ" أو "Save"
+function t(key) {
+    const pair = TEXT[key];
+    if (!pair) return key;
+    return lang === 'ar' ? pair[0] : pair[1];
+}
 
 
 /* =====================================================================
@@ -127,122 +137,189 @@ const t = k => { const d = D[k]; return d ? d[S.lang === 'ar' ? 0 : 1] : k; };
 ===================================================================== */
 
 // حماية من XSS: نحوّل الرموز الخاصة قبل ما نعرض أي نص
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function esc(text) {
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    return String(text ?? '').replace(/[&<>"']/g, ch => map[ch]);
+}
 
-const nf    = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const money = n => S.lang === 'ar' ? nf.format(+n || 0) + ' د.أ' : 'JOD ' + nf.format(+n || 0);
-const fdt   = s => new Date(String(s).replace(' ', 'T')).toLocaleString(S.lang === 'ar' ? 'ar-JO-u-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+// المبلغ: 12.50 د.أ  أو  JOD 12.50
+const numberFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function money(n) {
+    const formatted = numberFormat.format(+n || 0);
+    return lang === 'ar' ? formatted + ' د.أ' : 'JOD ' + formatted;
+}
 
-// رابط الصورة: صور السيرفر بتمر عن طريق الأكشن img، وإذا فشلت بنعرض الصورة البديلة
-const imgSrc = p => !p ? PH : (/^(https?:|data:)/.test(p) ? p : API + '?action=img&path=' + encodeURIComponent(p));
-const img    = (p, alt = '') => `<img src="${esc(imgSrc(p))}" alt="${esc(alt)}" loading="lazy" onerror="this.onerror=null;this.src='${PH}'">`;
+// التاريخ والوقت
+function formatDate(s) {
+    const date = new Date(String(s).replace(' ', 'T'));
+    const locale = lang === 'ar' ? 'ar-JO-u-nu-latn' : 'en-GB';
+    return date.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
+}
 
-const chip = st => `<span class="a-chip st-${esc(st)}">${t('st' + st)}</span>`;
+// رابط الصورة: صور السيرفر بتمر عن طريق الأكشن img
+function imgSrc(path) {
+    if (!path) return PLACEHOLDER;
+    if (/^(https?:|data:)/.test(path)) return path;
+    return API + '?action=img&path=' + encodeURIComponent(path);
+}
 
-// جدول جاهز: head = عناوين الأعمدة، rows = صفوف HTML
-const tbl = (head, rows) => `<div class="a-table"><table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${head.length}" class="a-empty">${t('none')}</td></tr>`}</tbody></table></div>`;
+// وسم صورة (وإذا فشلت بنعرض الصورة البديلة)
+function img(path, alt = '') {
+    return `<img src="${esc(imgSrc(path))}" alt="${esc(alt)}" loading="lazy" onerror="this.onerror=null;this.src='${PLACEHOLDER}'">`;
+}
 
-// صندوق بعنوان (panel)
-const panel = (h, body, extra = '') => `<section class="a-panel"><div class="a-panel-head"><h2>${h}</h2>${extra}</div>${body}</section>`;
+// شارة حالة الطلب
+function chip(status) {
+    return `<span class="a-chip st-${esc(status)}">${t('st' + status)}</span>`;
+}
+
+// جدول جاهز: headers = عناوين الأعمدة، rows = صفوف HTML جاهزة
+function table(headers, rows) {
+    const head = headers.map(h => `<th>${h}</th>`).join('');
+    const body = rows || `<tr><td colspan="${headers.length}" class="a-empty">${t('none')}</td></tr>`;
+    return `<div class="a-table"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+// صندوق بعنوان
+function panel(title, body, extra = '') {
+    return `<section class="a-panel"><div class="a-panel-head"><h2>${title}</h2>${extra}</div>${body}</section>`;
+}
 
 
 /* =====================================================================
-   4) الاتصال بالـ API
+   4) الاتصال بالسيرفر
+   api('اسم_الأكشن', {بارامترات الرابط}, body)
+   - بدون body = GET
+   - body كائن عادي = JSON
+   - body من نوع FormData = رفع ملفات
 ===================================================================== */
 
-// api('اسم_الأكشن', {بارامترات الرابط}, body)
-//  - بدون body = GET
-//  - body كائن عادي = JSON، و FormData = رفع ملفات
 async function api(action, params = {}, body) {
-    const u = new URL(API);
-    u.searchParams.set('action', action);
-    Object.entries(params).forEach(([k, v]) => { if (v !== '' && v != null) u.searchParams.set(k, v); });
-
-    const o = { credentials: 'same-origin' };
-    if (body instanceof FormData) {
-        o.method = 'POST';
-        o.body = body;
-    } else if (body) {
-        o.method = 'POST';
-        o.headers = { 'Content-Type': 'application/json' };
-        o.body = JSON.stringify(body);
+    const url = new URL(API);
+    url.searchParams.set('action', action);
+    for (const key in params) {
+        if (params[key] !== '' && params[key] != null) url.searchParams.set(key, params[key]);
     }
 
-    const r = await fetch(u, o);
-    let d;
-    try { d = await r.json(); } catch { throw Error(t('errSrv')); }
-    if (!r.ok) throw Error((S.lang === 'en' && d.error_en) || d.error || t('errGen'));
-    return d;
+    const options = { credentials: 'same-origin' };
+    if (body instanceof FormData) {
+        options.method = 'POST';
+        options.body = body;
+    } else if (body) {
+        options.method = 'POST';
+        options.headers = { 'Content-Type': 'application/json' };
+        options.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(url, options);
+
+    let data;
+    try {
+        data = await response.json();
+    } catch (e) {
+        throw new Error(t('errSrv'));
+    }
+
+    if (!response.ok) {
+        const message = (lang === 'en' && data.error_en) || data.error || t('errGen');
+        throw new Error(message);
+    }
+    return data;
 }
 
 
 /* =====================================================================
-   5) النوافذ: رسالة صغيرة (toast) + نافذة عامة (modal) + نافذة تأكيد الحذف
+   5) النوافذ: رسالة صغيرة + نافذة عامة + تأكيد الحذف
 ===================================================================== */
 
-// رسالة صغيرة تظهر تحت وتختفي لحالها
-function toast(msg, bad) {
+// رسالة صغيرة بتظهر تحت وبتختفي لحالها
+let toastTimer;
+function toast(message, isError) {
     let el = $('#a-toast');
-    if (!el) { el = document.createElement('div'); el.id = 'a-toast'; document.body.appendChild(el); }
-    el.textContent = msg;
-    el.className = 'show' + (bad ? ' bad' : '');
-    clearTimeout(toast.t);
-    toast.t = setTimeout(() => { el.className = ''; }, 2800);
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'a-toast';
+        document.body.appendChild(el);
+    }
+    el.textContent = message;
+    el.className = isError ? 'show bad' : 'show';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = ''; }, 2800);
 }
 
-// نافذة منبثقة عامة (تفاصيل الطلب، صور المستخدم، تغيير الباسورد)
+// نافذة منبثقة عامة (تفاصيل طلب، صور مستخدم، تغيير كلمة المرور)
 function modal(html) {
-    const m = document.createElement('div');
-    m.className = 'a-modal';
-    m.innerHTML = `<div class="a-modal-box" role="dialog" aria-modal="true"><button class="a-x" type="button" aria-label="${t('close')}">×</button>${html}</div>`;
+    const box = document.createElement('div');
+    box.className = 'a-modal';
+    box.innerHTML = `<div class="a-modal-box" role="dialog" aria-modal="true">
+        <button class="a-x" type="button" aria-label="${t('close')}">×</button>${html}</div>`;
 
-    const close = () => { m.remove(); document.removeEventListener('keydown', onKey); };
-    const onKey = e => { if (e.key === 'Escape') close(); };
+    function close() {
+        box.remove();
+        document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) {
+        if (e.key === 'Escape') close();
+    }
 
-    m.addEventListener('click', e => { if (e.target === m || e.target.closest('.a-x')) close(); });
+    // الإغلاق: بالضغط على X أو برا النافذة أو زر Esc
+    box.addEventListener('click', e => {
+        if (e.target === box || e.target.closest('.a-x')) close();
+    });
     document.addEventListener('keydown', onKey);
-    document.body.appendChild(m);
-    m.close = close;
-    return m;
+
+    document.body.appendChild(box);
+    box.close = close;
+    return box;
 }
 
-// نافذة تأكيد الحذف: بترجّع true لو ضغط "حذف"، و false لو ألغى (زر إلغاء / Esc / ضغط برا)
-function confirmBox(name = '') {
-    return new Promise(resolve => {
-        const o = document.createElement('div');
-        o.className = 'a-confirm-overlay';
-        o.innerHTML = `
-            <div class="a-confirm-box" role="alertdialog" aria-modal="true">
-                <div class="a-confirm-icon">🗑</div>
-                <h3>${t('delTitle')}</h3>
-                <p>${t('sure')}${name ? `<br><b>${esc(name)}</b>` : ''}</p>
-                <div class="a-confirm-actions">
-                    <button class="a-confirm-cancel" type="button">${t('cancel')}</button>
-                    <button class="a-confirm-delete" type="button">${t('del')}</button>
-                </div>
-            </div>`;
+// نافذة تأكيد الحذف: لو ضغط "حذف" بننفذ onYes
+function confirmBox(name, onYes) {
+    const overlay = document.createElement('div');
+    overlay.className = 'a-confirm-overlay';
+    overlay.innerHTML = `
+        <div class="a-confirm-box" role="alertdialog" aria-modal="true">
+            <div class="a-confirm-icon">🗑</div>
+            <h3>${t('delTitle')}</h3>
+            <p>${t('sure')}${name ? `<br><b>${esc(name)}</b>` : ''}</p>
+            <div class="a-confirm-actions">
+                <button class="a-confirm-cancel" type="button">${t('cancel')}</button>
+                <button class="a-confirm-delete" type="button">${t('del')}</button>
+            </div>
+        </div>`;
 
-        const done = ok => { o.remove(); document.removeEventListener('keydown', onKey); resolve(ok); };
-        const onKey = e => { if (e.key === 'Escape') done(false); };
+    function close() {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) {
+        if (e.key === 'Escape') close();
+    }
 
-        o.addEventListener('click', e => {
-            if (e.target === o || e.target.closest('.a-confirm-cancel')) done(false);
-            else if (e.target.closest('.a-confirm-delete')) done(true);
-        });
-        document.addEventListener('keydown', onKey);
-        document.body.appendChild(o);
-        $('.a-confirm-cancel', o).focus();   // الفوكس على "إلغاء" عشان ما يتحذف بالغلط
+    overlay.addEventListener('click', e => {
+        if (e.target === overlay || e.target.closest('.a-confirm-cancel')) {
+            close();
+        } else if (e.target.closest('.a-confirm-delete')) {
+            close();
+            onYes();
+        }
     });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
+    $('.a-confirm-cancel', overlay).focus();   // الفوكس على "إلغاء" عشان ما يتحذف بالغلط
 }
 
 // حذف عنصر بعد التأكيد: منتج / تصنيف / مستخدم
-async function askDelete(action, id, name) {
-    if (!(await confirmBox(name))) return;
-    try {
-        await api(action, {}, { id });
-        toast(t('deleted'));
-        view(true);   // إعادة تحميل الصفحة الحالية بدون وميض
-    } catch (x) { toast(x.message, true); }
+function askDelete(action, id, name) {
+    confirmBox(name, async () => {
+        try {
+            await api(action, {}, { id: id });
+            toast(t('deleted'));
+            showPage();   // نعيد رسم الصفحة
+        } catch (e) {
+            toast(e.message, true);
+        }
+    });
 }
 
 // نجهّز FormData من فورم: نشيل حقل الصورة لو فاضي، ونضيف id لو تعديل
@@ -271,61 +348,85 @@ function pwModal() {
             await api('change-password', {}, Object.fromEntries(new FormData(e.target)));
             toast(t('pwOk'));
             m.close();
-        } catch (x) { $('#pw-msg', m).textContent = x.message; }
+        } catch (err) {
+            $('#pw-msg', m).textContent = err.message;
+        }
     };
 }
 
 
 /* =====================================================================
-   6) التنقل بين الصفحات (History API)
+   6) الصفحات والقائمة الجانبية
 ===================================================================== */
 
 // اسم ملف الصفحة => اسم الشاشة
-const ROUTES = {
-    'dashboard.html': 'dashboard', 'products.html': 'products', 'add-product.html': 'add', 'edit-product.html': 'edit',
-    'categories.html': 'categories', 'orders.html': 'orders', 'users.html': 'users', 'artisans.html': 'artisans',
-    'product-images.html': 'images', 'activity-logs.html': 'logs'
+const PAGES = {
+    'dashboard.html': 'dashboard', 'products.html': 'products', 'add-product.html': 'add',
+    'edit-product.html': 'edit', 'categories.html': 'categories', 'orders.html': 'orders',
+    'users.html': 'users', 'artisans.html': 'artisans', 'product-images.html': 'images',
+    'activity-logs.html': 'logs'
 };
 
-// عناصر القائمة الجانبية: [مفتاح, ملف, نص, أيقونة] — والعناصر اللي بدون ملف هي عناوين أقسام
+// عنوان كل شاشة
+const TITLES = {
+    dashboard: 't_dashboard', products: 't_products', add: 't_add', edit: 't_edit', categories: 't_categories',
+    orders: 't_orders', users: 't_users', artisans: 't_artisans', images: 't_images', logs: 't_logs'
+};
+
+// عناصر القائمة: [مفتاح، ملف، نص، أيقونة] — اللي بدون ملف هو عنوان قسم
 const NAV = [
     ['main', null],
-    ['dashboard', 'dashboard.html', 'nDash', '▦'], ['products', 'products.html', 'nProducts', '◇'],
-    ['categories', 'categories.html', 'nCats', '▤'], ['orders', 'orders.html', 'nOrders', '▣'], ['users', 'users.html', 'nUsers', '♙'],
+    ['dashboard', 'dashboard.html', 'nDash', '▦'],
+    ['products', 'products.html', 'nProducts', '◇'],
+    ['categories', 'categories.html', 'nCats', '▤'],
+    ['orders', 'orders.html', 'nOrders', '▣'],
+    ['users', 'users.html', 'nUsers', '♙'],
     ['content', null],
-    ['artisans', 'artisans.html', 'nArtisans', '✿'], ['images', 'product-images.html', 'nImages', '▧'], ['logs', 'activity-logs.html', 'nLogs', '◷']
+    ['artisans', 'artisans.html', 'nArtisans', '✿'],
+    ['images', 'product-images.html', 'nImages', '▧'],
+    ['logs', 'activity-logs.html', 'nLogs', '◷']
 ];
 
-const adminPath = new URL(BASE + 'admin/').pathname;
-const routeOf = url => url.pathname.startsWith(adminPath) ? ROUTES[url.pathname.slice(adminPath.length).toLowerCase()] : null;
-const A  = f => BASE + 'admin/' + f;                           // رابط صفحة أدمن
-const go = url => { history.pushState(null, '', url); view(); };  // انتقال بدون تحميل الصفحة
-
-
-/* =====================================================================
-   7) الهيكل العام: لوحة التحكم + شاشة الدخول
-===================================================================== */
-
-const root = () => $('#admin-root');
-
-// نضبط لغة واتجاه الصفحة
-function setDir() {
-    document.documentElement.lang = S.lang;
-    document.documentElement.dir = S.lang === 'ar' ? 'rtl' : 'ltr';
+// رابط صفحة أدمن
+function adminLink(file) {
+    return BASE + 'admin/' + file;
 }
 
-// الهيكل: القائمة الجانبية + الهيدر + مكان المحتوى
+// أنهي صفحة مفتوحة الآن؟ (من اسم الملف بالرابط)
+function currentPage() {
+    const fileName = location.pathname.split('/').pop().toLowerCase();
+    return PAGES[fileName] || 'dashboard';
+}
+
+// الهيكل العام: قائمة جانبية + هيدر + مكان المحتوى
 function layout() {
-    setDir();
-    const mark = S.lang === 'ar' ? 'ك' : 'K';
-    root().innerHTML = `
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+
+    const mark = lang === 'ar' ? 'ك' : 'K';
+    const page = currentPage();
+    // إضافة/تعديل منتج = نفس خانة "المنتجات" بالقائمة
+    const activeKey = (page === 'add' || page === 'edit') ? 'products' : page;
+
+    let links = '';
+    for (const item of NAV) {
+        if (item[1]) {
+            const active = item[0] === activeKey ? 'active' : '';
+            links += `<a class="side-link ${active}" href="${adminLink(item[1])}"><span class="si">${item[3]}</span>${t(item[2])}</a>`;
+        } else {
+            links += `<span class="side-label">${t(item[0] === 'main' ? 'mMain' : 'mContent')}</span>`;
+        }
+    }
+
+    $('#admin-root').innerHTML = `
     <div class="admin-shell">
         <aside class="admin-sidebar" id="a-sb">
-            <a class="brand" href="${A('dashboard.html')}"><span class="brand-mark">${mark}</span><span><b>KANAAN</b><small>${t('brandSub')}</small></span></a>
-            <div class="admin-profile"><div class="avatar">${esc(String(S.user.name).slice(0, 1).toUpperCase())}</div><div><b>${esc(S.user.name)}</b><small>${t('roleAdmin')}</small></div></div>
-            ${NAV.map(n => n[1]
-                ? `<a class="side-link" data-k="${n[0]}" href="${A(n[1])}"><span class="si">${n[3]}</span>${t(n[2])}</a>`
-                : `<span class="side-label">${t(n[0] === 'main' ? 'mMain' : 'mContent')}</span>`).join('')}
+            <a class="brand" href="${adminLink('dashboard.html')}"><span class="brand-mark">${mark}</span><span><b>KANAAN</b><small>${t('brandSub')}</small></span></a>
+            <div class="admin-profile">
+                <div class="avatar">${esc(String(currentUser.name).slice(0, 1).toUpperCase())}</div>
+                <div><b>${esc(currentUser.name)}</b><small>${t('roleAdmin')}</small></div>
+            </div>
+            ${links}
             <a class="side-link side-back" href="${BASE}index.html">↩　${t('toStore')}</a>
         </aside>
         <main class="admin-main">
@@ -342,111 +443,188 @@ function layout() {
             <div id="a-view"><div class="a-loading">${t('loading')}</div></div>
         </main>
     </div>`;
+
+    // ربط أزرار الهيدر
+    $('#a-lang').onclick = toggleLang;
+    $('#a-pw').onclick = pwModal;
+    $('#a-burger').onclick = () => $('#a-sb').classList.toggle('open');
+    $('#a-out').onclick = async () => {
+        try { await api('logout', {}, {}); } catch (e) { }
+        location.reload();
+    };
+}
+
+// تبديل اللغة: نحفظها ونعيد تحميل الصفحة
+function toggleLang() {
+    lang = lang === 'ar' ? 'en' : 'ar';
+    saveLang(lang);
+    location.reload();
 }
 
 // شاشة الدخول (أو إعداد أول أدمن لو setup = true)
 function gate(setup) {
-    setDir();
-    const mark = S.lang === 'ar' ? 'ك' : 'K';
-    root().innerHTML = `
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+
+    const mark = lang === 'ar' ? 'ك' : 'K';
+    const nameField = setup
+        ? `<label class="a-f"><span>${t('gName')}</span><input name="name" required minlength="3"></label>`
+        : '';
+
+    $('#admin-root').innerHTML = `
     <div class="a-gate"><form class="a-gate-card" id="a-gate">
         <button class="a-btn a-btn-light a-gate-lang" id="a-lang" type="button">${t('langTo')}</button>
         <a class="brand" href="${BASE}index.html"><span class="brand-mark">${mark}</span><span><b>KANAAN</b><small>${t('brandSub')}</small></span></a>
         <h1>${setup ? t('gSetup') : t('gLogin')}</h1>
         <p>${setup ? t('gSetupP') : t('gLoginP')}</p>
-        ${setup ? `<label class="a-f"><span>${t('gName')}</span><input name="name" required minlength="3"></label>` : ''}
+        ${nameField}
         <label class="a-f"><span>${t('gEmail')}</span><input name="email" type="email" required autocomplete="email"></label>
         <label class="a-f"><span>${t('gPass')}</span><input name="password" type="password" required minlength="${setup ? 8 : 1}" autocomplete="${setup ? 'new-password' : 'current-password'}"></label>
         <div class="a-msg" id="a-msg" role="alert"></div>
         <button class="a-btn a-btn-primary a-block" type="submit">${setup ? t('gCreate') : t('gGo')}</button>
     </form></div>`;
 
+    $('#a-lang').onclick = toggleLang;
+
     $('#a-gate').onsubmit = async e => {
         e.preventDefault();
         try {
-            await api(setup ? 'setup-admin' : 'login', {}, Object.fromEntries(new FormData(e.target)));
+            const action = setup ? 'setup-admin' : 'login';
+            await api(action, {}, Object.fromEntries(new FormData(e.target)));
             await boot();
-        } catch (x) { $('#a-msg').textContent = x.message; }
+        } catch (err) {
+            $('#a-msg').textContent = err.message;
+        }
     };
 }
 
 
 /* =====================================================================
-   8) الشاشات (Views)
-   كل شاشة بترجّع نص HTML، أو كائن { html, bind } حيث bind بيربط الأزرار بعد العرض
+   7) الشاشات
+   كل شاشة: بتجيب البيانات من السيرفر، بتبني HTML، بتحطه بالصفحة، وبتربط الأزرار
 ===================================================================== */
+
+// بنحط HTML داخل مكان المحتوى
+function render(html) {
+    $('#a-view').innerHTML = html;
+}
 
 /* ---------- لوحة التحكم ---------- */
 async function vDashboard() {
     const g = await api('admin-stats');
 
-    // بطاقات الأرقام: [نص, قيمة, صفحة]
+    // بطاقات الأرقام: [نص، قيمة، صفحة]
     const stats = [
-        ['sProducts', g.products, 'products.html'], ['sCats', g.categories, 'categories.html'], ['sOrders', g.orders, 'orders.html'],
-        ['sUsers', g.users, 'users.html'], ['sPending', g.pending, 'orders.html?status=Pending'], ['sRevenue', money(g.revenue), 'orders.html']
+        ['sProducts', g.products, 'products.html'],
+        ['sCats', g.categories, 'categories.html'],
+        ['sOrders', g.orders, 'orders.html'],
+        ['sUsers', g.users, 'users.html'],
+        ['sPending', g.pending, 'orders.html?status=Pending'],
+        ['sRevenue', money(g.revenue), 'orders.html']
     ];
+    const statsHtml = stats.map(s =>
+        `<a class="a-stat" href="${adminLink(s[2])}"><small>${t(s[0])}</small><strong>${s[1]}</strong></a>`
+    ).join('');
 
     // الرسم البياني: ارتفاع كل عمود نسبة لأعلى شهر
     const monthly = g.monthly || [];
-    const max = Math.max(1, ...monthly.map(m => +m.revenue));
-    const bars = monthly.map(m => `
-        <div class="a-bar-col">
+    let max = 1;
+    for (const m of monthly) {
+        if (+m.revenue > max) max = +m.revenue;
+    }
+    const barsHtml = monthly.map(m => {
+        const height = Math.max(4, (+m.revenue / max) * 100);
+        return `<div class="a-bar-col">
             <div class="a-bar-value">${money(m.revenue)}</div>
-            <div class="a-bar-track"><i style="height:${Math.max(4, (+m.revenue / max) * 100)}%"></i></div>
+            <div class="a-bar-track"><i style="height:${height}%"></i></div>
             <small>${esc(m.month)}</small>
-        </div>`).join('');
+        </div>`;
+    }).join('');
 
-    const recent = g.recent.map(o => `<tr><td>#${o.id}</td><td>${esc(o.full_name)}</td><td>${money(o.total)}</td><td>${chip(o.status)}</td><td>${fdt(o.created_at)}</td></tr>`).join('');
-    const low = g.low_stock.length
-        ? `<ul class="a-list">${g.low_stock.map(p => `<li><a href="${A('edit-product.html?id=' + p.id)}">${esc(p.name)}</a><b class="${p.stock < 1 ? 'bad' : ''}">${p.stock} ${t('pcs')}</b></li>`).join('')}</ul>`
-        : `<p class="a-empty">${t('dAllOk')}</p>`;
+    // أحدث الطلبات
+    const recentRows = g.recent.map(o =>
+        `<tr><td>#${o.id}</td><td>${esc(o.full_name)}</td><td>${money(o.total)}</td><td>${chip(o.status)}</td><td>${formatDate(o.created_at)}</td></tr>`
+    ).join('');
 
-    return `
-    <div class="a-stats">${stats.map(s => `<a class="a-stat" href="${A(s[2])}"><small>${t(s[0])}</small><strong>${s[1]}</strong></a>`).join('')}</div>
+    // المخزون المنخفض
+    let lowHtml;
+    if (g.low_stock.length) {
+        const items = g.low_stock.map(p =>
+            `<li><a href="${adminLink('edit-product.html?id=' + p.id)}">${esc(p.name)}</a><b class="${p.stock < 1 ? 'bad' : ''}">${p.stock} ${t('pcs')}</b></li>`
+        ).join('');
+        lowHtml = `<ul class="a-list">${items}</ul>`;
+    } else {
+        lowHtml = `<p class="a-empty">${t('dAllOk')}</p>`;
+    }
 
-    <div class="a-chart-panel">
-        <div class="a-chart-head"><h3>${t('dChart')}</h3><span>${t('dChartNote')}</span></div>
-        <div class="a-bars">${bars || `<p class="a-empty">${t('none')}</p>`}</div>
-    </div>
+    const recentHead = [t('oNo'), t('oCust'), t('oTotal'), t('oStatus'), t('oDate')];
+    const ordersLink = `<a class="a-link" href="${adminLink('orders.html')}">${t('nOrders')} →</a>`;
 
-    <div class="a-cols">
-        ${panel(t('dRecent'), tbl([t('oNo'), t('oCust'), t('oTotal'), t('oStatus'), t('oDate')], recent),
-            `<a class="a-link" href="${A('orders.html')}">${t('nOrders')} →</a>`)}
-        ${panel(t('dLow'), low)}
-    </div>`;
+    render(`
+        <div class="a-stats">${statsHtml}</div>
+        <div class="a-chart-panel">
+            <div class="a-chart-head"><h3>${t('dChart')}</h3><span>${t('dChartNote')}</span></div>
+            <div class="a-bars">${barsHtml || `<p class="a-empty">${t('none')}</p>`}</div>
+        </div>
+        <div class="a-cols">
+            ${panel(t('dRecent'), table(recentHead, recentRows), ordersLink)}
+            ${panel(t('dLow'), lowHtml)}
+        </div>`);
 }
 
 /* ---------- الطلبات ---------- */
-async function vOrders(q) {
-    const st = q.get('status') || '';
-    const rows = (await api('admin-orders', { status: st })).items;
+async function vOrders() {
+    const status = new URLSearchParams(location.search).get('status') || '';
+    const rows = (await api('admin-orders', { status: status })).items;
 
     // أزرار فلترة الحالة
-    const pill = k => `<a class="a-pill ${st === k ? 'active' : ''}" href="${A('orders.html' + (k ? '?status=' + k : ''))}">${k ? t('st' + k) : t('all')}</a>`;
+    function pill(key) {
+        const active = status === key ? 'active' : '';
+        const href = adminLink('orders.html' + (key ? '?status=' + key : ''));
+        const label = key ? t('st' + key) : t('all');
+        return `<a class="a-pill ${active}" href="${href}">${label}</a>`;
+    }
+    const pills = pill('') + STATUSES.map(pill).join('');
 
     const head = [t('oNo'), t('oCust'), t('oPhone'), t('oCity'), t('oItems'), t('oTotal'), t('oStatus'), t('oPay'), t('oDate'), ''];
     const body = rows.map(o => `
         <tr><td>#${o.id}</td><td>${esc(o.full_name)}</td><td dir="ltr">${esc(o.phone)}</td><td>${esc(o.city)}</td><td>${o.items_count}</td>
-            <td>${money(o.total)}</td><td>${chip(o.status)}</td><td>${t('pay' + o.payment_status)}</td><td>${fdt(o.created_at)}</td>
-            <td><button class="a-btn a-btn-sm" data-order="${o.id}" type="button">${t('view')}</button></td></tr>`).join('');
+            <td>${money(o.total)}</td><td>${chip(o.status)}</td><td>${t('pay' + o.payment_status)}</td><td>${formatDate(o.created_at)}</td>
+            <td><button class="a-btn a-btn-sm" data-order="${o.id}" type="button">${t('view')}</button></td></tr>`
+    ).join('');
 
-    return {
-        html: `<div class="a-pills">${pill('')}${STATUSES.map(pill).join('')}</div>${panel(t('nOrders') + ` (${rows.length})`, tbl(head, body))}`,
-        bind() { $$('[data-order]').forEach(b => b.onclick = () => orderModal(+b.dataset.order)); }
-    };
+    render(`<div class="a-pills">${pills}</div>${panel(t('nOrders') + ` (${rows.length})`, table(head, body))}`);
+
+    // زر "عرض" يفتح تفاصيل الطلب
+    $$('[data-order]').forEach(btn => {
+        btn.onclick = () => orderModal(+btn.dataset.order);
+    });
 }
 
 // نافذة تفاصيل الطلب + تغيير الحالة والدفع
 async function orderModal(id) {
     let o;
-    try { o = (await api('admin-order', { id })).order; }
-    catch (e) { return toast(e.message, true); }
+    try {
+        o = (await api('admin-order', { id: id })).order;
+    } catch (e) {
+        toast(e.message, true);
+        return;
+    }
 
     const closed = o.status === 'Cancelled';   // الطلب الملغي ما بنغيّر حالته
-    const select = (name, opts, cur, lock) =>
-        `<select name="${name}" ${lock ? 'disabled' : ''}>${opts.map(v => `<option value="${v}" ${v === cur ? 'selected' : ''}>${t((name === 'status' ? 'st' : 'pay') + v)}</option>`).join('')}</select>`;
 
-    const lines = o.items.map(i => `<tr><td>${esc(i.product_name)}</td><td>${money(i.unit_price)}</td><td>${i.quantity}</td><td>${money(i.unit_price * i.quantity)}</td></tr>`).join('');
+    // قائمة منسدلة: name = status أو payment_status
+    function select(name, options, current, locked) {
+        const prefix = name === 'status' ? 'st' : 'pay';
+        const opts = options.map(v =>
+            `<option value="${v}" ${v === current ? 'selected' : ''}>${t(prefix + v)}</option>`
+        ).join('');
+        return `<select name="${name}" ${locked ? 'disabled' : ''}>${opts}</select>`;
+    }
+
+    const lines = o.items.map(i =>
+        `<tr><td>${esc(i.product_name)}</td><td>${money(i.unit_price)}</td><td>${i.quantity}</td><td>${money(i.unit_price * i.quantity)}</td></tr>`
+    ).join('');
 
     const m = modal(`
         <h2>${t('oDetail')} #${o.id}</h2>
@@ -454,11 +632,11 @@ async function orderModal(id) {
             <div><dt>${t('oCust')}</dt><dd>${esc(o.full_name)}</dd></div>
             <div><dt>${t('oPhone')}</dt><dd dir="ltr">${esc(o.phone)}</dd></div>
             <div><dt>${t('oEmail')}</dt><dd>${esc(o.email || '—')}</dd></div>
-            <div><dt>${t('oDate')}</dt><dd>${fdt(o.created_at)}</dd></div>
+            <div><dt>${t('oDate')}</dt><dd>${formatDate(o.created_at)}</dd></div>
             <div class="wide"><dt>${t('oAddr')}</dt><dd>${esc(o.city)}, ${esc(o.address)}</dd></div>
             ${o.notes ? `<div class="wide"><dt>${t('oNotes')}</dt><dd>${esc(o.notes)}</dd></div>` : ''}
         </dl>
-        ${tbl([t('oLines'), t('pPrice'), t('oQty'), t('oTotal')], lines)}
+        ${table([t('oLines'), t('pPrice'), t('oQty'), t('oTotal')], lines)}
         <div class="a-sum"><span>${t('oTotal')}</span><b>${money(o.total)}</b></div>
         <form id="o-form" class="a-row">
             <label class="a-f"><span>${t('oStatus')}</span>${select('status', STATUSES, o.status, closed)}</label>
@@ -469,14 +647,16 @@ async function orderModal(id) {
 
     $('#o-form', m).onsubmit = async e => {
         e.preventDefault();
-        const b = Object.fromEntries(new FormData(e.target));
-        if (closed) b.status = 'Cancelled';   // الحقل المعطّل ما بينبعت، فنرجّعه يدوياً
+        const values = Object.fromEntries(new FormData(e.target));
+        if (closed) values.status = 'Cancelled';   // الحقل المعطّل ما بينبعت، فنرجّعه يدوياً
         try {
-            await api('admin-order-update', {}, { id, ...b });
+            await api('admin-order-update', {}, { id: id, ...values });
             toast(t('saved'));
             m.close();
-            view(true);
-        } catch (x) { toast(x.message, true); }
+            showPage();
+        } catch (err) {
+            toast(err.message, true);
+        }
     };
 }
 
@@ -485,49 +665,61 @@ async function vProducts() {
     const items = (await api('products')).items;
     const head = ['', t('pName'), t('pCat'), t('pPrice'), t('pStock'), ''];
 
-    const rows = list => list.map(p => `
-        <tr><td class="a-thumb">${img(p.image, p.name)}</td><td><b>${esc(p.name)}</b></td><td>${esc(p.category_name || '—')}</td>
-            <td>${money(p.price)}</td><td class="${p.stock < 1 ? 'bad' : ''}">${p.stock}</td>
-            <td class="a-acts">
-                <a class="a-btn a-btn-sm" href="${A('edit-product.html?id=' + p.id)}">${t('edit')}</a>
-                <button class="a-btn a-btn-sm a-btn-del" data-del="${p.id}" type="button">${t('del')}</button>
-            </td></tr>`).join('');
+    // بنية صفوف الجدول من قائمة منتجات
+    function buildRows(list) {
+        return list.map(p => `
+            <tr><td class="a-thumb">${img(p.image, p.name)}</td><td><b>${esc(p.name)}</b></td><td>${esc(p.category_name || '—')}</td>
+                <td>${money(p.price)}</td><td class="${p.stock < 1 ? 'bad' : ''}">${p.stock}</td>
+                <td class="a-acts">
+                    <a class="a-btn a-btn-sm" href="${adminLink('edit-product.html?id=' + p.id)}">${t('edit')}</a>
+                    <button class="a-btn a-btn-sm a-btn-del" data-del="${p.id}" type="button">${t('del')}</button>
+                </td></tr>`).join('');
+    }
 
-    return {
-        html: panel(t('nProducts') + ` (${items.length})`,
-            `<input class="a-search" id="p-q" type="search" placeholder="${t('pSearch')}"><div id="p-tbl">${tbl(head, rows(items))}</div>`,
-            `<a class="a-btn a-btn-primary" href="${A('add-product.html')}">${t('pAdd')}</a>`),
-        bind() {
-            // البحث بالاسم أو بالتصنيف
-            $('#p-q').oninput = () => {
-                const q = $('#p-q').value.trim().toLowerCase();
-                const list = items.filter(p => !q || p.name.toLowerCase().includes(q) || (p.category_name || '').toLowerCase().includes(q));
-                $('#p-tbl').innerHTML = tbl(head, rows(list));
+    // نرسم الجدول ونربط أزرار الحذف (بنعيدها كل ما تغيّر البحث)
+    function drawTable(list) {
+        $('#p-tbl').innerHTML = table(head, buildRows(list));
+        $$('[data-del]', $('#p-tbl')).forEach(btn => {
+            btn.onclick = () => {
+                const product = items.find(x => x.id == btn.dataset.del);
+                askDelete('admin-product-delete', +btn.dataset.del, product && product.name);
             };
-            // الحذف (على الجدول كله لأنه بينرسم من جديد مع البحث)
-            $('#p-tbl').onclick = e => {
-                const b = e.target.closest('[data-del]');
-                if (!b) return;
-                const p = items.find(x => x.id == b.dataset.del);
-                askDelete('admin-product-delete', +b.dataset.del, p && p.name);
-            };
-        }
+        });
+    }
+
+    const addBtn = `<a class="a-btn a-btn-primary" href="${adminLink('add-product.html')}">${t('pAdd')}</a>`;
+    render(panel(t('nProducts') + ` (${items.length})`,
+        `<input class="a-search" id="p-q" type="search" placeholder="${t('pSearch')}"><div id="p-tbl"></div>`,
+        addBtn));
+    drawTable(items);
+
+    // البحث بالاسم أو بالتصنيف
+    $('#p-q').oninput = () => {
+        const q = $('#p-q').value.trim().toLowerCase();
+        const filtered = items.filter(p =>
+            !q || p.name.toLowerCase().includes(q) || (p.category_name || '').toLowerCase().includes(q)
+        );
+        drawTable(filtered);
     };
 }
 
 /* ---------- إضافة / تعديل منتج ---------- */
-async function vProductForm(q, edit) {
+async function vProductForm(edit) {
     const cats = (await api('categories')).items;
-    const p = edit ? (await api('product', { id: q.get('id') })).item : {};
+    const id = new URLSearchParams(location.search).get('id');
+    const p = edit ? (await api('product', { id: id })).item : {};
 
     // حقل إدخال عادي
-    const field = (name, label, attrs = '', type = 'text') =>
-        `<label class="a-f"><span>${label}</span><input name="${name}" type="${type}" value="${esc(p[name] ?? '')}" ${attrs}></label>`;
+    function field(name, label, attrs = '', type = 'text') {
+        return `<label class="a-f"><span>${label}</span><input name="${name}" type="${type}" value="${esc(p[name] ?? '')}" ${attrs}></label>`;
+    }
 
-    const catOptions = cats.map(c => `<option value="${c.id}" ${String(p.category_id) === String(c.id) ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+    const catOptions = cats.map(c => {
+        const selected = String(p.category_id) === String(c.id) ? 'selected' : '';
+        return `<option value="${c.id}" ${selected}>${esc(c.name)}</option>`;
+    }).join('');
 
-    return {
-        html: panel(edit ? t('t_edit') : t('t_add'), `
+    render(panel(edit ? t('t_edit') : t('t_add'), `
         <form id="p-form" class="a-form">
             ${field('name', t('pName'), 'required minlength="2"')}
             <label class="a-f"><span>${t('pCat')}</span><select name="category_id"><option value="">${t('pNoCat')}</option>${catOptions}</select></label>
@@ -545,72 +737,87 @@ async function vProductForm(q, edit) {
             <div class="a-msg wide" id="p-msg" role="alert"></div>
             <div class="a-actions wide">
                 <button class="a-btn a-btn-primary" type="submit">${t('save')}</button>
-                <a class="a-btn a-btn-light" href="${A('products.html')}">${t('cancel')}</a>
+                <a class="a-btn a-btn-light" href="${adminLink('products.html')}">${t('cancel')}</a>
             </div>
-        </form>`),
-        bind() {
-            // معاينة الصورة قبل الرفع
-            $('#p-img').onchange = e => {
-                const f = e.target.files[0];
-                if (f) $('#pv').innerHTML = `<img src="${URL.createObjectURL(f)}" alt="">`;
-            };
-            $('#p-form').onsubmit = async e => {
-                e.preventDefault();
-                try {
-                    await api('admin-product-save', {}, formData(e.target, edit && p.id));
-                    toast(t('saved'));
-                    go(new URL(A('products.html')));
-                } catch (x) { $('#p-msg').textContent = x.message; }
-            };
+        </form>`));
+
+    // معاينة الصورة قبل الرفع
+    $('#p-img').onchange = e => {
+        const file = e.target.files[0];
+        if (file) $('#pv').innerHTML = `<img src="${URL.createObjectURL(file)}" alt="">`;
+    };
+
+    // حفظ المنتج
+    $('#p-form').onsubmit = async e => {
+        e.preventDefault();
+        try {
+            await api('admin-product-save', {}, formData(e.target, edit && p.id));
+            toast(t('saved'));
+            location.href = adminLink('products.html');
+        } catch (err) {
+            $('#p-msg').textContent = err.message;
         }
     };
 }
 
 /* ---------- التصنيفات (فورم + جدول + حذف) ---------- */
-async function vCategories(q) {
-    const cats  = (await api('categories')).items;
+async function vCategories() {
+    const cats = (await api('categories')).items;
     const prods = (await api('products')).items;
-    const count = id => prods.filter(p => p.category_id == id).length;
-    const cur   = cats.find(c => c.id == q.get('id')) || {};   // لو في id بالرابط = تعديل
+    const editId = new URLSearchParams(location.search).get('id');
+    const cur = cats.find(c => c.id == editId) || {};   // لو في id بالرابط = تعديل
+
+    // كم منتج بكل تصنيف
+    function countProducts(catId) {
+        return prods.filter(p => p.category_id == catId).length;
+    }
 
     const rows = cats.map(c => `
-        <tr><td class="a-thumb">${img(c.image, c.name)}</td><td><b>${esc(c.name)}</b></td><td>${esc(c.description || '—')}</td><td>${count(c.id)}</td>
+        <tr><td class="a-thumb">${img(c.image, c.name)}</td><td><b>${esc(c.name)}</b></td><td>${esc(c.description || '—')}</td><td>${countProducts(c.id)}</td>
             <td class="a-acts">
-                <a class="a-btn a-btn-sm" href="${A('categories.html?id=' + c.id)}">${t('edit')}</a>
+                <a class="a-btn a-btn-sm" href="${adminLink('categories.html?id=' + c.id)}">${t('edit')}</a>
                 <button class="a-btn a-btn-sm a-btn-del" data-del="${c.id}" type="button">${t('del')}</button>
             </td></tr>`).join('');
 
-    return {
-        html: `
-        ${panel(cur.id ? t('cEdit') : t('cNew'), `
-            <form id="c-form" class="a-form">
-                <label class="a-f"><span>${t('cName')}</span><input name="name" required minlength="2" value="${esc(cur.name || '')}"></label>
-                <label class="a-f"><span>${t('cDesc')}</span><input name="description" value="${esc(cur.description || '')}"></label>
-                <div class="a-f wide"><span>${t('pImage')}</span>
-                    <div class="a-upload"><div class="a-preview sm">${img(cur.image)}</div><input name="image" type="file" accept="image/jpeg,image/png,image/webp"></div>
-                </div>
-                <div class="a-msg wide" id="c-msg" role="alert"></div>
-                <div class="a-actions wide">
-                    <button class="a-btn a-btn-primary" type="submit">${cur.id ? t('save') : t('add')}</button>
-                    ${cur.id ? `<a class="a-btn a-btn-light" href="${A('categories.html')}">${t('cancel')}</a>` : ''}
-                </div>
-            </form>`)}
-        ${panel(t('nCats') + ` (${cats.length})`, tbl(['', t('cName'), t('cDesc'), t('cProducts'), ''], rows))}`,
-        bind() {
-            $('#c-form').onsubmit = async e => {
-                e.preventDefault();
-                try {
-                    await api('admin-category-save', {}, formData(e.target, cur.id));
-                    toast(t('saved'));
-                    go(new URL(A('categories.html')));
-                } catch (x) { $('#c-msg').textContent = x.message; }
-            };
-            $$('[data-del]').forEach(b => b.onclick = () => {
-                const c = cats.find(x => x.id == b.dataset.del);
-                askDelete('admin-category-delete', +b.dataset.del, c && c.name);
-            });
+    const cancelBtn = cur.id ? `<a class="a-btn a-btn-light" href="${adminLink('categories.html')}">${t('cancel')}</a>` : '';
+
+    const formPanel = panel(cur.id ? t('cEdit') : t('cNew'), `
+        <form id="c-form" class="a-form">
+            <label class="a-f"><span>${t('cName')}</span><input name="name" required minlength="2" value="${esc(cur.name || '')}"></label>
+            <label class="a-f"><span>${t('cDesc')}</span><input name="description" value="${esc(cur.description || '')}"></label>
+            <div class="a-f wide"><span>${t('pImage')}</span>
+                <div class="a-upload"><div class="a-preview sm">${img(cur.image)}</div><input name="image" type="file" accept="image/jpeg,image/png,image/webp"></div>
+            </div>
+            <div class="a-msg wide" id="c-msg" role="alert"></div>
+            <div class="a-actions wide">
+                <button class="a-btn a-btn-primary" type="submit">${cur.id ? t('save') : t('add')}</button>
+                ${cancelBtn}
+            </div>
+        </form>`);
+
+    const listPanel = panel(t('nCats') + ` (${cats.length})`, table(['', t('cName'), t('cDesc'), t('cProducts'), ''], rows));
+
+    render(formPanel + listPanel);
+
+    // حفظ التصنيف
+    $('#c-form').onsubmit = async e => {
+        e.preventDefault();
+        try {
+            await api('admin-category-save', {}, formData(e.target, cur.id));
+            toast(t('saved'));
+            location.href = adminLink('categories.html');
+        } catch (err) {
+            $('#c-msg').textContent = err.message;
         }
     };
+
+    // حذف تصنيف
+    $$('[data-del]').forEach(btn => {
+        btn.onclick = () => {
+            const c = cats.find(x => x.id == btn.dataset.del);
+            askDelete('admin-category-delete', +btn.dataset.del, c && c.name);
+        };
+    });
 }
 
 /* ---------- المستخدمين ---------- */
@@ -619,197 +826,181 @@ async function vUsers() {
     const head = [t('uName'), t('uEmail'), t('uRole'), t('uOrders'), t('uPhotos'), t('uJoined'), ''];
 
     const body = rows.map(u => {
-        const me = u.id == S.user.id;   // الأدمن ما بيعدّل دوره ولا بيحذف نفسه
-        const avatar = u.profile_image ? img(u.profile_image, u.name) : `<span class="a-user-avatar">${esc((u.name || 'K').slice(0, 1))}</span>`;
+        const isMe = u.id == currentUser.id;   // الأدمن ما بيعدّل دوره ولا بيحذف نفسه
+        const avatar = u.profile_image
+            ? img(u.profile_image, u.name)
+            : `<span class="a-user-avatar">${esc((u.name || 'K').slice(0, 1))}</span>`;
+        const deleteBtn = isMe ? '' : `<button class="a-btn a-btn-sm a-btn-del" data-del="${u.id}" type="button">${t('del')}</button>`;
+
         return `
         <tr><td><div class="a-user-cell">${avatar}<b>${esc(u.name)}</b></div></td><td dir="ltr">${esc(u.email)}</td>
-            <td><select data-role="${u.id}" ${me ? 'disabled' : ''}>
+            <td><select data-role="${u.id}" ${isMe ? 'disabled' : ''}>
                 <option value="customer" ${u.role === 'customer' ? 'selected' : ''}>${t('roleCustomer')}</option>
                 <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>${t('roleAdmin')}</option>
             </select></td>
             <td>${u.orders_count}</td>
             <td><button class="a-btn a-btn-sm" data-user-images="${u.id}" type="button">${t('view')} (${u.images_count || 0})</button></td>
-            <td>${fdt(u.created_at)}</td>
-            <td class="a-acts">${me ? '' : `<button class="a-btn a-btn-sm a-btn-del" data-del="${u.id}" type="button">${t('del')}</button>`}</td></tr>`;
+            <td>${formatDate(u.created_at)}</td>
+            <td class="a-acts">${deleteBtn}</td></tr>`;
     }).join('');
 
-    return {
-        html: panel(t('nUsers') + ` (${rows.length})`, tbl(head, body)),
-        bind() {
-            // تغيير دور المستخدم
-            $$('[data-role]').forEach(s => s.onchange = async () => {
-                try { await api('admin-user-update', {}, { id: +s.dataset.role, role: s.value }); toast(t('saved')); }
-                catch (x) { toast(x.message, true); view(true); }
-            });
+    render(panel(t('nUsers') + ` (${rows.length})`, table(head, body)));
 
-            // عرض صور حساب المستخدم
-            $$('[data-user-images]').forEach(b => b.onclick = async () => {
-                try {
-                    const items = (await api('admin-user-images', { user_id: b.dataset.userImages })).items;
-                    const html = items.length
-                        ? `<div class="a-user-gallery">${items.map(ph => `<figure>${img(ph.image_path, ph.name)}<figcaption>${fdt(ph.created_at)}</figcaption></figure>`).join('')}</div>`
-                        : `<p class="a-empty">${t('uNoPhotos')}</p>`;
-                    modal(`<h2>${t('uPhotosTitle')}</h2>${html}`);
-                } catch (e) { toast(e.message, true); }
-            });
+    // تغيير دور المستخدم
+    $$('[data-role]').forEach(select => {
+        select.onchange = async () => {
+            try {
+                await api('admin-user-update', {}, { id: +select.dataset.role, role: select.value });
+                toast(t('saved'));
+            } catch (err) {
+                toast(err.message, true);
+                showPage();
+            }
+        };
+    });
 
-            // حذف مستخدم
-            $$('[data-del]').forEach(b => b.onclick = () => {
-                const u = rows.find(x => x.id == b.dataset.del);
-                askDelete('admin-user-delete', +b.dataset.del, u && u.name);
-            });
-        }
-    };
+    // عرض صور حساب المستخدم
+    $$('[data-user-images]').forEach(btn => {
+        btn.onclick = async () => {
+            try {
+                const items = (await api('admin-user-images', { user_id: btn.dataset.userImages })).items;
+                let html;
+                if (items.length) {
+                    const figures = items.map(ph =>
+                        `<figure>${img(ph.image_path, ph.name)}<figcaption>${formatDate(ph.created_at)}</figcaption></figure>`
+                    ).join('');
+                    html = `<div class="a-user-gallery">${figures}</div>`;
+                } else {
+                    html = `<p class="a-empty">${t('uNoPhotos')}</p>`;
+                }
+                modal(`<h2>${t('uPhotosTitle')}</h2>${html}`);
+            } catch (err) {
+                toast(err.message, true);
+            }
+        };
+    });
+
+    // حذف مستخدم
+    $$('[data-del]').forEach(btn => {
+        btn.onclick = () => {
+            const u = rows.find(x => x.id == btn.dataset.del);
+            askDelete('admin-user-delete', +btn.dataset.del, u && u.name);
+        };
+    });
 }
 
 /* ---------- الحرفيين ---------- */
 async function vArtisans() {
     const rows = (await api('admin-artisans')).items;
-    const cards = rows.length
-        ? `<div class="a-cards">${rows.map(r => `<article class="a-card"><h3>${esc(r.artisan_name)}</h3><p>${esc(r.artisan_story || '')}</p><small>${r.products_count} ${t('aProductsN')}</small></article>`).join('')}</div>`
-        : `<p class="a-empty">${t('none')}</p>`;
-    return panel(t('nArtisans') + ` (${rows.length})`, cards) + `<p class="a-hint">${t('aHint')}</p>`;
+
+    let cards;
+    if (rows.length) {
+        const list = rows.map(r =>
+            `<article class="a-card"><h3>${esc(r.artisan_name)}</h3><p>${esc(r.artisan_story || '')}</p><small>${r.products_count} ${t('aProductsN')}</small></article>`
+        ).join('');
+        cards = `<div class="a-cards">${list}</div>`;
+    } else {
+        cards = `<p class="a-empty">${t('none')}</p>`;
+    }
+
+    render(panel(t('nArtisans') + ` (${rows.length})`, cards) + `<p class="a-hint">${t('aHint')}</p>`);
 }
 
 /* ---------- صور المنتجات (تغيير صورة منتج بسرعة) ---------- */
 async function vImages() {
     const items = (await api('products')).items;
+
     const cards = items.map(p => `
         <article class="a-img">
             <div class="a-img-box">${img(p.image, p.name)}</div><b>${esc(p.name)}</b>
             <label class="a-btn a-btn-sm a-btn-light">${t('iUpload')}<input type="file" hidden data-up="${p.id}" accept="image/jpeg,image/png,image/webp"></label>
         </article>`).join('');
 
-    return {
-        html: panel(t('nImages'), `<div class="a-imgs">${cards || `<p class="a-empty">${t('none')}</p>`}</div><p class="a-hint">${t('pHint')}</p>`),
-        bind() {
-            $$('[data-up]').forEach(input => input.onchange = async () => {
-                if (!input.files[0]) return;
-                const fd = new FormData();
-                fd.append('id', input.dataset.up);
-                fd.append('image', input.files[0]);
-                try { await api('admin-product-image', {}, fd); toast(t('iDone')); view(true); }
-                catch (x) { toast(x.message, true); }
-            });
-        }
-    };
+    render(panel(t('nImages'), `<div class="a-imgs">${cards || `<p class="a-empty">${t('none')}</p>`}</div><p class="a-hint">${t('pHint')}</p>`));
+
+    // رفع صورة جديدة لمنتج
+    $$('[data-up]').forEach(input => {
+        input.onchange = async () => {
+            if (!input.files[0]) return;
+            const fd = new FormData();
+            fd.append('id', input.dataset.up);
+            fd.append('image', input.files[0]);
+            try {
+                await api('admin-product-image', {}, fd);
+                toast(t('iDone'));
+                showPage();
+            } catch (err) {
+                toast(err.message, true);
+            }
+        };
+    });
 }
 
 /* ---------- سجل النشاطات ---------- */
 async function vLogs() {
     const rows = (await api('admin-logs')).items;
-    const body = rows.map(r => `<tr><td>${fdt(r.created_at)}</td><td>${esc(r.user_name || '—')}</td><td>${esc(D['a_' + r.action] ? t('a_' + r.action) : r.action)}</td><td>${esc(r.details || '')}</td></tr>`).join('');
-    return panel(t('nLogs'), tbl([t('lWhen'), t('lUser'), t('lAction'), t('lDetails')], body));
+
+    const body = rows.map(r => {
+        // اسم العملية: لو عنا ترجمة بنستخدمها، وإلا بنعرض الاسم زي ما هو
+        const actionName = TEXT['a_' + r.action] ? t('a_' + r.action) : r.action;
+        return `<tr><td>${formatDate(r.created_at)}</td><td>${esc(r.user_name || '—')}</td><td>${esc(actionName)}</td><td>${esc(r.details || '')}</td></tr>`;
+    }).join('');
+
+    render(panel(t('nLogs'), table([t('lWhen'), t('lUser'), t('lAction'), t('lDetails')], body)));
 }
 
 
 /* =====================================================================
-   9) عرض الشاشة الحالية حسب الرابط
+   8) عرض الصفحة الحالية
 ===================================================================== */
 
-const TITLES = {
-    dashboard: 't_dashboard', products: 't_products', add: 't_add', edit: 't_edit', categories: 't_categories',
-    orders: 't_orders', users: 't_users', artisans: 't_artisans', images: 't_images', logs: 't_logs'
-};
-
-const VIEWS = {
-    dashboard: vDashboard, orders: vOrders, products: vProducts,
-    add: q => vProductForm(q, false), edit: q => vProductForm(q, true),
-    categories: vCategories, users: vUsers, artisans: vArtisans, images: vImages, logs: vLogs
-};
-
-// token: لو المستخدم تنقّل بسرعة، نتجاهل نتيجة الصفحة القديمة
-let token = 0;
-
-// soft = true: تحديث المحتوى بدون شاشة تحميل (بعد حذف / حفظ)
-async function view(soft) {
-    const url  = new URL(location.href);
-    const page = routeOf(url) || 'dashboard';
-    const my   = ++token;
+async function showPage() {
+    const page = currentPage();
 
     $('#a-title').textContent = t(TITLES[page]);
     document.title = 'KANAAN Admin | ' + t(TITLES[page]);
 
-    // تمييز الرابط الحالي بالقائمة (إضافة/تعديل منتج = المنتجات)
-    const key = page === 'add' || page === 'edit' ? 'products' : page;
-    $$('.side-link[data-k]').forEach(a => a.classList.toggle('active', a.dataset.k === key));
-    $('#a-sb').classList.remove('open');
-
-    const box = $('#a-view');
-    if (!soft) {
-        box.innerHTML = `<div class="a-loading">${t('loading')}</div>`;
-        window.scrollTo(0, 0);
-    }
-
     try {
-        const r = await VIEWS[page](url.searchParams);
-        if (my !== token) return;
-        const v = typeof r === 'string' ? { html: r } : r;
-        box.innerHTML = v.html;
-        if (v.bind) v.bind();
+        if (page === 'dashboard') await vDashboard();
+        else if (page === 'orders') await vOrders();
+        else if (page === 'products') await vProducts();
+        else if (page === 'add') await vProductForm(false);
+        else if (page === 'edit') await vProductForm(true);
+        else if (page === 'categories') await vCategories();
+        else if (page === 'users') await vUsers();
+        else if (page === 'artisans') await vArtisans();
+        else if (page === 'images') await vImages();
+        else if (page === 'logs') await vLogs();
     } catch (e) {
-        if (my !== token) return;
-        box.innerHTML = `<div class="a-panel"><div class="a-msg">${esc(e.message)}</div></div>`;
+        render(`<div class="a-panel"><div class="a-msg">${esc(e.message)}</div></div>`);
     }
 }
 
 
 /* =====================================================================
-   10) الأحداث العامة (نقرات الهيدر + روابط التنقل)
-===================================================================== */
-
-document.addEventListener('click', e => {
-    // تبديل اللغة
-    if (e.target.closest('#a-lang')) {
-        S.lang = S.lang === 'ar' ? 'en' : 'ar';
-        store.set('kn_lang', S.lang);
-        S.user ? (layout(), view()) : boot();
-        return;
-    }
-    if (e.target.closest('#a-pw'))     { pwModal(); return; }
-    if (e.target.closest('#a-burger')) { $('#a-sb').classList.toggle('open'); return; }
-
-    // تسجيل الخروج
-    if (e.target.closest('#a-out')) {
-        api('logout', {}, {}).catch(() => {}).then(() => { S.user = null; boot(); });
-        return;
-    }
-
-    // روابط الأدمن الداخلية: ننتقل بدون تحميل الصفحة
-    const a = e.target.closest('a[href]');
-    if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || a.target === '_blank') return;
-    const url = new URL(a.href, location.href);
-    if (url.origin !== location.origin || !routeOf(url)) return;
-    e.preventDefault();
-    go(url);
-});
-
-// زر الرجوع/الأمام بالمتصفح
-addEventListener('popstate', () => S.user && view());
-
-
-/* =====================================================================
-   11) التشغيل: نتأكد إنه في أدمن مسجّل دخول (أو نعرض إعداد أول أدمن)
+   9) التشغيل: نتأكد إنه في أدمن مسجّل دخول (أو نعرض إعداد أول أدمن)
 ===================================================================== */
 
 async function boot() {
     try {
-        S.user = (await api('me')).user;
+        currentUser = (await api('me')).user;
 
         // أدمن مسجّل: نعرض اللوحة
-        if (S.user && S.user.role === 'admin') { layout(); view(); return; }
+        if (currentUser && currentUser.role === 'admin') {
+            layout();
+            showPage();
+            return;
+        }
 
         // غير مسجّل: شاشة دخول (أو إعداد أول أدمن لو ما في أدمن)
-        const needsSetup = !S.user && (await api('setup-status')).needs_setup;
+        const needsSetup = !currentUser && (await api('setup-status')).needs_setup;
         gate(needsSetup);
 
         // مسجّل بس مش أدمن
-        if (S.user) $('#a-msg').textContent = t('gNotAdmin');
+        if (currentUser) $('#a-msg').textContent = t('gNotAdmin');
     } catch (e) {
-        root().innerHTML = `<div class="a-gate"><div class="a-gate-card"><h1>${t('errGen')}</h1><div class="a-msg">${esc(e.message)}</div></div></div>`;
+        $('#admin-root').innerHTML = `<div class="a-gate"><div class="a-gate-card"><h1>${t('errGen')}</h1><div class="a-msg">${esc(e.message)}</div></div></div>`;
     }
 }
 
 boot();
-
-})();

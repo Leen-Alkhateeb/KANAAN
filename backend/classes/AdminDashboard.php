@@ -1,8 +1,5 @@
 <?php
-/**
- * إحصائيات لوحة تحكم الأدمن (الملخص + بيانات رسم المبيعات)
- * بتُستدعى من الأكشن: admin-stats
- */
+
 class AdminDashboard
 {
     public static function statistics(PDO $db): array
