@@ -1,45 +1,64 @@
-(() => {
+(function () {
 'use strict';
 
 /* =====================================================================
-   KANAAN storefront — single-page app (Arabic / English)
-   Sections:
-     1. Config & state     5. Layout (header / footer)
-     2. Translations       6. Components
-     3. Utilities          7. Views
-     4. API                8. Router, events, boot
+   KANAAN storefront — نسخة مبسّطة وبدون تكرار
+   الأقسام:
+     1) الإعدادات والحالة      5) الهيدر والفوتر
+     2) النصوص (عربي/English)  6) مكونات صغيرة (مشتركة)
+     3) دوال مساعدة            7) الصفحات
+     4) الاتصال بالسيرفر       8) الراوتر والأحداث والتشغيل
 ===================================================================== */
 
-/* ---------------------------------------------------------------------
-   1. Config & state
---------------------------------------------------------------------- */
-const BASE  = new URL('../../', document.currentScript.src).href;
-const API   = BASE + 'api.php';
+
+/* =====================================================================
+   1) الإعدادات والحالة
+===================================================================== */
+
+const BASE = new URL('../../', document.currentScript.src).href;   // مجلد frontend
+const API = BASE + 'api.php';
 const VIDEO = BASE + 'assets/videos/15898195_3840_2160_30fps.mp4';
-const PH    = BASE + 'assets/images/placeholder.svg';
+const PLACEHOLDER = BASE + 'assets/images/placeholder.svg';
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_UPLOAD  = 2 * 1024 * 1024;
+const MAX_UPLOAD = 2 * 1024 * 1024;   // 2MB
 
-const $  = (s, r = document) => r.querySelector(s);
-const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+// اختصارات: $ = عنصر واحد، $$ = كل العناصر
+function $(selector, parent = document) {
+    return parent.querySelector(selector);
+}
+function $$(selector, parent = document) {
+    return [...parent.querySelectorAll(selector)];
+}
 
-const store = {
-    get: k => { try { return localStorage.getItem(k); } catch { return null; } },
-    set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }
-};
+// قراءة/حفظ بالمتصفح (try/catch لأنه ممكن localStorage يكون ممنوع)
+function storeGet(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+function storeSet(key, value) {
+    try { localStorage.setItem(key, value); } catch (e) { }
+}
 
-const S = {
-    lang: store.get('kn_lang') === 'en' ? 'en' : 'ar',
-    user: null,
-    count: 0,
-    cats: []
-};
+// الحالة العامة
+let lang = storeGet('kn_lang') === 'en' ? 'en' : 'ar';   // اللغة الحالية
+let currentUser = null;                                  // المستخدم المسجّل
+let cartCount = 0;                                       // عدد القطع بالسلة
+let categories = [];                                     // التصنيفات
 
-/* ---------------------------------------------------------------------
-   2. Translations   key: [Arabic, English]
---------------------------------------------------------------------- */
-const D = {
+function isArabic() {
+    return lang === 'ar';
+}
+
+function isAdmin() {
+    return !!currentUser && currentUser.role === 'admin';
+}
+
+
+/* =====================================================================
+   2) النصوص — كل نص: [عربي, English]  (قاموس بس، ما فيه منطق)
+===================================================================== */
+
+const TEXT = {
     /* chrome */
     top1: ['صناعة يدوية تحمل حكاية أرض', 'Handmade with a story from our land'],
     top2: ['كل قطعة تحكي حكاية من فلسطين', 'Every piece tells a story of Palestine'],
@@ -99,7 +118,7 @@ const D = {
     sNew: ['الأحدث', 'Newest'], sLow: ['السعر: الأقل أولاً', 'Price: low to high'], sHigh: ['السعر: الأعلى أولاً', 'Price: high to low'],
 
     /* product */
-    pHome: ['الرئيسية', 'Home'], pShop: ['المتجر', 'Shop'],
+    pShop: ['المتجر', 'Shop'],
     pDescDef: ['قطعة صُنعت يدوياً بعناية على أيدي حرفيين فلسطينيين، تجمع الأصالة والجمال.', 'A carefully handcrafted piece made by Palestinian artisans, combining authenticity and beauty.'],
     pBuy: ['اشترِ الآن', 'Buy now'], pStock: ['المتوفر', 'In stock'], pArt: ['عن الحرفي', 'Meet the maker'],
     pF1: ['صناعة يدوية', 'Handmade'], pF2: ['تصميم أصيل', 'Authentic design'], pF3: ['قطعة فريدة', 'Unique piece'],
@@ -131,7 +150,7 @@ const D = {
     rPrint: ['طباعة', 'Print'],
     rNo: ['رقم الطلب', 'Order no.'], rDate: ['التاريخ', 'Date'], rTo: ['التوصيل إلى', 'Deliver to'],
     rStatus: ['الحالة', 'Status'], rPay: ['الدفع', 'Payment'], rCod: ['الدفع عند الاستلام', 'Cash on delivery'],
-    oEye: ['طلباتي', 'My orders'], oH: ['طلباتي ومشترياتي', 'Orders & purchases'],
+    oH: ['طلباتي ومشترياتي', 'Orders & purchases'],
     oEmpty: ['لا توجد طلبات بعد. عند إتمام طلب سيظهر هنا.', 'No orders yet. Once you place one, it will appear here.'],
     stPending: ['قيد الانتظار', 'Pending'], stProcessing: ['قيد التجهيز', 'Processing'], stShipped: ['تم الشحن', 'Shipped'],
     stDelivered: ['تم التسليم', 'Delivered'], stCancelled: ['ملغي', 'Cancelled'],
@@ -143,7 +162,7 @@ const D = {
     aCreate: ['أنشئ حسابك', 'Create your account'], aCreateP: ['أنشئ حساباً لتتابع طلباتك وتحفظ مفضلتك.', 'Create an account to track your orders and save favourites.'],
     aArtH1: ['حكايتك', 'Your story'], aArtH2: ['تبدأ من هنا.', 'starts here.'],
     aArtP: ['انضم إلى مجتمع يحتفي بالحرفة والأصالة.', 'Join a community that celebrates craft and authenticity.'],
-    aName: ['الاسم الكامل', 'Full name'], aEmail: ['البريد الإلكتروني', 'Email address'], aPass: ['كلمة المرور', 'Password'],
+    aEmail: ['البريد الإلكتروني', 'Email address'], aPass: ['كلمة المرور', 'Password'],
     aPass2: ['تأكيد كلمة المرور', 'Confirm password'], aShow: ['إظهار', 'Show'], aHide: ['إخفاء', 'Hide'],
     aLogin: ['دخول', 'Sign in'], aReg: ['إنشاء الحساب', 'Create account'],
     aNoAcc: ['ليس لديك حساب؟', 'Don’t have an account?'], aHaveAcc: ['لديك حساب بالفعل؟', 'Already have an account?'],
@@ -195,7 +214,7 @@ const D = {
     eC1: ['اغسلها بلطف', 'Wash gently'], eC1p: ['غسيل يدوي بصابون خفيف وماء بارد.', 'Hand wash with mild soap and cool water.'],
     eC2: ['جفّفها مفروشة', 'Dry flat'], eC2p: ['بعيداً عن أشعة الشمس المباشرة.', 'Away from direct sunlight.'],
     eC3: ['اكوِها من الخلف', 'Iron on the back'], eC3p: ['بحرارة منخفضة لتبقى الغرز بارزة.', 'On low heat so the stitches stay raised.'],
-    oPEye: ['حرفة', 'Craft'], pH1: ['فخار', 'Handmade'], pH2: ['صُنع بالأيدي', 'pottery'],
+    pH1: ['فخار', 'Handmade'], pH2: ['صُنع بالأيدي', 'pottery'],
     pLead: ['يُشكَّل الطين باليد، ويُحرق، ويُنهى قطعةً قطعة. والفروق الصغيرة جزء مما يجعله يدوياً.', 'Clay is shaped by hand, fired, and finished one piece at a time. Small differences are part of what makes it handmade.'],
     pStepsH: ['من الطين إلى مائدتك', 'From clay to table'],
     pS1: ['التشكيل', 'Shaping'], pS1p: ['يُشكَّل الطين باليد على الدولاب أو بدونه.', 'The clay is shaped by hand, on the wheel or off it.'],
@@ -208,124 +227,223 @@ const D = {
     pC3: ['تعامل برفق', 'Handle with care'], pC3p: ['القطع اليدوية قد تتشقق إن سقطت.', 'Handmade pieces can chip if dropped.']
 };
 
-const t = k => D[k]?.[S.lang === 'ar' ? 0 : 1] ?? k;
+// جلب النص حسب اللغة: t('add') => "أضف إلى السلة" أو "Add to cart"
+function t(key) {
+    const pair = TEXT[key];
+    if (!pair) return key;   // ما في ترجمة: نرجّع المفتاح نفسه
+    if (isArabic()) return pair[0];
+    return pair[1];
+}
 
-/* ---------------------------------------------------------------------
-   3. Utilities
---------------------------------------------------------------------- */
-const ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ESC_MAP[c]);
-const U   = p => BASE + p;
 
-const nf    = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const money = n => S.lang === 'ar' ? `${nf.format(+n || 0)} د.أ` : `JOD ${nf.format(+n || 0)}`;
-const fdate = s => new Date(String(s).replace(' ', 'T'))
-    .toLocaleDateString(S.lang === 'ar' ? 'ar-JO-u-nu-latn' : 'en-GB');
+/* =====================================================================
+   3) دوال مساعدة
+===================================================================== */
 
-/* Images */
-const IMG = {
-    tatreez:  'https://handmadepalestine.com/cdn/shop/files/IMG_2816_6e10ba4f-7202-44bc-8155-63c839c2e4c3.jpg?v=1770279932&width=1200',
+// رابط داخل المشروع
+function U(path) {
+    return BASE + path;
+}
+
+// يرجّع html إذا الشرط صحيح، وإلا نص فاضي (عشان نكتب الشروط داخل القوالب بسهولة)
+function when(condition, html) {
+    if (condition) return html;
+    return '';
+}
+
+// حماية من XSS: نحوّل الرموز الخاصة قبل ما نعرض أي نص
+function esc(text) {
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    return String(text ?? '').replace(/[&<>"']/g, ch => map[ch]);
+}
+
+// المبلغ: 12.50 د.أ  أو  JOD 12.50
+const numberFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function money(n) {
+    const formatted = numberFormat.format(+n || 0);
+    if (isArabic()) return formatted + ' د.أ';
+    return 'JOD ' + formatted;
+}
+
+// التاريخ (أرقام لاتينية حتى بالعربي)
+function formatDate(s) {
+    const date = new Date(String(s).replace(' ', 'T'));   // صيغة MySQL => ISO
+    let locale = 'en-GB';
+    if (isArabic()) locale = 'ar-JO-u-nu-latn';
+    return date.toLocaleDateString(locale);
+}
+
+/* ---------- الصور ---------- */
+
+const IMAGES = {
+    tatreez: 'https://handmadepalestine.com/cdn/shop/files/IMG_2816_6e10ba4f-7202-44bc-8155-63c839c2e4c3.jpg?v=1770279932&width=1200',
     coasters: 'https://handmadepalestine.com/cdn/shop/files/47FE90A0-EDAC-4508-A01A-0E929365307B.jpg?v=1754750565',
-    jewelry:  'https://www.shoppalestine.org/cdn/shop/collections/jewelry.jpg?v=1679682706',
-    soap:     'https://www.annadwa.org/wp-content/uploads/2025/08/azz211-1.webp',
-    gift:     'https://handmadepalestine.com/cdn/shop/collections/IMG_8425_-_gift_set___tatreez_card_holder.jpg?crop=center&height=1200&v=1744626698&width=1200',
-    wood:     'https://talleh.com/storage/resized/MTAwLXJhbWFsbGFoLTAyMTc2MDk1MTY2NjA5Mzc3OGRiLWRmMDktNGU1Yy1hNGRiLWZmYzYwMjA5NGVmMA%3D%3D_1000x600_95.webp',
-    ceramic:  'https://cdn.shopify.com/s/files/1/0943/9798/9176/files/Untitled_1024_x_1024_px_3.webp?v=1776679255'
+    jewelry: 'https://www.shoppalestine.org/cdn/shop/collections/jewelry.jpg?v=1679682706',
+    soap: 'https://www.annadwa.org/wp-content/uploads/2025/08/azz211-1.webp',
+    gift: 'https://handmadepalestine.com/cdn/shop/collections/IMG_8425_-_gift_set___tatreez_card_holder.jpg?crop=center&height=1200&v=1744626698&width=1200',
+    wood: 'https://talleh.com/storage/resized/MTAwLXJhbWFsbGFoLTAyMTc2MDk1MTY2NjA5Mzc3OGRiLWRmMDktNGU1Yy1hNGRiLWZmYzYwMjA5NGVmMA%3D%3D_1000x600_95.webp',
+    ceramic: 'https://cdn.shopify.com/s/files/1/0943/9798/9176/files/Untitled_1024_x_1024_px_3.webp?v=1776679255'
 };
 
-/* Fallback image per craft when a product has no uploaded image */
-const IMG_RULES = [
-    [/تطريز|وسادة|tatreez|embroid/i,      IMG.tatreez],
-    [/فخار|خزف|إبريق|سيراميك|ceramic|pottery/i, IMG.ceramic],
-    [/صابون|soap/i,                        IMG.soap],
-    [/خشب|زيتون|wood|olive/i,              IMG.wood],
-    [/مجوهر|حلي|jewel/i,                   IMG.jewelry],
-    [/هدية|هدايا|gift/i,                   IMG.gift]
+// صورة بديلة حسب نوع المنتج (إذا المنتج ما إله صورة مرفوعة)
+const IMAGE_RULES = [
+    { pattern: /تطريز|وسادة|tatreez|embroid/i, image: IMAGES.tatreez },
+    { pattern: /فخار|خزف|إبريق|سيراميك|ceramic|pottery/i, image: IMAGES.ceramic },
+    { pattern: /صابون|soap/i, image: IMAGES.soap },
+    { pattern: /خشب|زيتون|wood|olive/i, image: IMAGES.wood },
+    { pattern: /مجوهر|حلي|jewel/i, image: IMAGES.jewelry },
+    { pattern: /هدية|هدايا|gift/i, image: IMAGES.gift }
 ];
 
-/* English names for category labels */
-const CAT_EN = [
-    [/تطريز/, 'Palestinian Embroidery'], [/فخار|خزف|سيراميك/, 'Pottery & Ceramics'], [/صابون/, 'Nabulsi Soap'],
-    [/خشب/, 'Olive Wood'], [/هدايا|هدية/, 'Gifts & Accessories'], [/مجوهر|حلي/, 'Jewelry']
+// أسماء التصنيفات بالإنجليزي
+const CATEGORY_NAMES_EN = [
+    { pattern: /تطريز/, name: 'Palestinian Embroidery' },
+    { pattern: /فخار|خزف|سيراميك/, name: 'Pottery & Ceramics' },
+    { pattern: /صابون/, name: 'Nabulsi Soap' },
+    { pattern: /خشب/, name: 'Olive Wood' },
+    { pattern: /هدايا|هدية/, name: 'Gifts & Accessories' },
+    { pattern: /مجوهر|حلي/, name: 'Jewelry' }
 ];
 
-/** Uploaded files are served through the API; absolute URLs are used as-is. */
-const imgSrc = path => /^(https?:|data:)/.test(path)
-    ? path
-    : `${API}?action=img&path=${encodeURIComponent(String(path).replace(/^\//, ''))}`;
+// رابط الصورة: الرابط الكامل زي ما هو، والباقي ملفات مرفوعة بتمر عن طريق الـ API
+function imgSrc(path) {
+    if (/^(https?:|data:)/.test(path)) return path;
+    const cleanPath = String(path).replace(/^\//, '');   // نشيل أول سلاش
+    return API + '?action=img&path=' + encodeURIComponent(cleanPath);
+}
 
-function imageFor(p = {}) {
+// صورة المنتج: المرفوعة، وإلا حسب النوع، وإلا صورة افتراضية
+function imageFor(product) {
+    const p = product || {};
     if (p.image) return imgSrc(p.image);
-    const text = `${p.category_name || ''} ${p.name || ''}`;
-    return (IMG_RULES.find(([re]) => re.test(text)) || [, IMG.coasters])[1];
+
+    const text = (p.category_name || '') + ' ' + (p.name || '');
+    for (const rule of IMAGE_RULES) {
+        if (rule.pattern.test(text)) return rule.image;
+    }
+    return IMAGES.coasters;
 }
 
-function catLabel(name = '') {
-    if (S.lang === 'ar') return name || 'حرفة فلسطينية';
-    const m = CAT_EN.find(([re]) => re.test(name));
-    return m ? m[1] : (name || 'Palestinian Craft');
+// اسم التصنيف حسب اللغة
+function categoryLabel(name) {
+    const categoryName = name || '';
+    if (isArabic()) return categoryName || 'حرفة فلسطينية';
+
+    for (const item of CATEGORY_NAMES_EN) {
+        if (item.pattern.test(categoryName)) return item.name;
+    }
+    return categoryName || 'Palestinian Craft';
 }
 
-const imgTag = (src, alt = '') =>
-    `<img loading="lazy" src="${esc(src)}" alt="${esc(alt)}" onerror="this.onerror=null;this.src='${PH}'">`;
+// وسم صورة (وإذا فشلت بنعرض الصورة البديلة؛ نشيل onerror أول عشان ما يعلق بحلقة)
+function imgTag(src, alt = '') {
+    return `<img loading="lazy" src="${esc(src)}" alt="${esc(alt)}" onerror="this.onerror=null;this.src='${PLACEHOLDER}'">`;
+}
 
-/* Icons */
-const icon = (path, w = 22) =>
-    `<svg viewBox="0 0 24 24" width="${w}" height="${w}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+/* ---------- الأيقونات ---------- */
 
-const IC = {
-    user:  icon('<circle cx="12" cy="8" r="3.6"/><path d="M5 20c.6-3.6 3.4-5.6 7-5.6s6.4 2 7 5.6"/>'),
-    bag:   icon('<path d="M5 8h14l1 13H4L5 8Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/>'),
+function icon(path, size = 22) {
+    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+}
+
+const ICONS = {
+    user: icon('<circle cx="12" cy="8" r="3.6"/><path d="M5 20c.6-3.6 3.4-5.6 7-5.6s6.4 2 7 5.6"/>'),
+    bag: icon('<path d="M5 8h14l1 13H4L5 8Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/>'),
     globe: icon('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8-3-2.8 15 0 18"/>', 20),
-    menu:  icon('<path d="M4 7h16M4 12h16M4 17h16"/>'),
+    menu: icon('<path d="M4 7h16M4 12h16M4 17h16"/>'),
     close: icon('<path d="M6 6l12 12M18 6L6 18"/>'),
     trash: icon('<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6"/>', 18),
-    plus:  icon('<path d="M12 5v14M5 12h14"/>', 16),
+    plus: icon('<path d="M12 5v14M5 12h14"/>', 16),
     minus: icon('<path d="M5 12h14"/>', 16),
     arrow: icon('<path d="M5 12h14M13 6l6 6-6 6"/>', 18),
     check: icon('<path d="M5 12l5 5 9-10"/>', 18)
 };
 
-const arrowSpan = `<span class="arr">${IC.arrow}</span>`;
+const ARROW_SPAN = `<span class="arr">${ICONS.arrow}</span>`;
 
-/* ---------------------------------------------------------------------
-   4. API & shared state
---------------------------------------------------------------------- */
+
+/* =====================================================================
+   4) الاتصال بالسيرفر
+   api('اسم_الأكشن', {بارامترات الرابط}, body)
+   - بدون body = GET
+   - body كائن عادي = JSON
+   - body من نوع FormData = رفع ملفات
+===================================================================== */
+
 async function api(action, params = {}, body) {
     const url = new URL(API);
     url.searchParams.set('action', action);
-    for (const [k, v] of Object.entries(params)) {
-        if (v !== '' && v != null) url.searchParams.set(k, v);
+    for (const key in params) {
+        if (params[key] !== '' && params[key] != null) url.searchParams.set(key, params[key]);
     }
 
-    const opts = { credentials: 'same-origin' };
-    if (body) {
-        opts.method = 'POST';
-        if (body instanceof FormData) {
-            opts.body = body;                       // the browser sets the multipart header
-        } else {
-            opts.headers = { 'Content-Type': 'application/json' };
-            opts.body = JSON.stringify(body);
-        }
+    const options = { credentials: 'same-origin' };   // يرسل الكوكيز (الجلسة)
+    if (body instanceof FormData) {
+        options.method = 'POST';
+        options.body = body;                          // المتصفح بحط الـ header لحاله
+    } else if (body) {
+        options.method = 'POST';
+        options.headers = { 'Content-Type': 'application/json' };
+        options.body = JSON.stringify(body);
     }
 
-    const res = await fetch(url, opts);
+    const response = await fetch(url, options);
+
     let data;
-    try { data = await res.json(); } catch { throw Error(t('errSrv')); }
-    if (!res.ok) throw Error((S.lang === 'en' && data.error_en) || data.error || t('errGen'));
+    try {
+        data = await response.json();
+    } catch (e) {
+        throw new Error(t('errSrv'));   // الرد مش JSON (مثلاً PHP طلّع خطأ HTML)
+    }
+
+    if (!response.ok) {
+        const message = (lang === 'en' && data.error_en) || data.error || t('errGen');
+        throw new Error(message);
+    }
     return data;
 }
 
+// نجيب التصنيفات ونحفظها (بتنستخدم بالرئيسية والكتالوج وصفحات الحرف)
+async function loadCategories() {
+    const res = await api('categories');
+    categories = res.items || [];
+    return categories;
+}
+
+// نحدّث عدد السلة والمستخدم (حتى لو طلب فشل، الثاني بكمّل)
 async function refreshState() {
-    const [cart, me] = await Promise.allSettled([api('cart'), api('me')]);
-    S.count = cart.status === 'fulfilled' ? (cart.value.count || 0) : 0;
-    S.user  = me.status === 'fulfilled' ? (me.value.user || null) : null;
+    const results = await Promise.allSettled([api('cart'), api('me')]);
+    const cartResult = results[0];
+    const meResult = results[1];
+
+    cartCount = 0;
+    currentUser = null;
+    if (cartResult.status === 'fulfilled') cartCount = cartResult.value.count || 0;
+    if (meResult.status === 'fulfilled') currentUser = meResult.value.user || null;
+
     paintTools();
 }
 
+// رسالة صغيرة بتظهر وبتختفي لحالها
+let toastTimer;
+function toast(message, isError) {
+    let el = $('#toast');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'toast';
+        el.setAttribute('role', 'status');
+        document.body.appendChild(el);
+    }
+    el.textContent = message;
+    el.className = isError ? 'show bad' : 'show';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = ''; }, 2600);
+}
+
+// إضافة منتج للسلة: بترجّع true إذا نجحت
 async function addToCart(id, qty = 1) {
     try {
-        await api('cart-add', {}, { id: +id, qty });
+        await api('cart-add', {}, { id: +id, qty: qty });
         await refreshState();
         toast(t('added'));
         return true;
@@ -335,251 +453,386 @@ async function addToCart(id, qty = 1) {
     }
 }
 
-function toast(msg, bad) {
-    let el = $('#toast');
-    if (!el) {
-        el = document.createElement('div');
-        el.id = 'toast';
-        el.setAttribute('role', 'status');
-        document.body.appendChild(el);
-    }
-    el.textContent = msg;
-    el.className = 'show' + (bad ? ' bad' : '');
-    clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => { el.className = ''; }, 2600);
-}
-
-/** Loads the products of the first category whose name matches `re`. */
-async function productsByCategory(re) {
+// منتجات أول تصنيف اسمه بطابق الـ regex (لصفحات التطريز والفخار)
+async function productsByCategory(pattern) {
     try {
-        if (!S.cats.length) S.cats = (await api('categories')).items || [];
-        const cat = S.cats.find(c => re.test(c.name));
-        if (!cat) return { id: 0, items: [] };
-        return { id: cat.id, items: (await api('products', { category: cat.id })).items || [] };
-    } catch {
+        if (!categories.length) await loadCategories();
+
+        let found = null;
+        for (const c of categories) {
+            if (pattern.test(c.name)) {
+                found = c;
+                break;
+            }
+        }
+        if (!found) return { id: 0, items: [] };
+
+        const res = await api('products', { category: found.id });
+        return { id: found.id, items: res.items || [] };
+    } catch (e) {
         return { id: 0, items: [] };
     }
 }
 
-/* ---------------------------------------------------------------------
-   5. Layout — header & footer
---------------------------------------------------------------------- */
+
+/* =====================================================================
+   5) الهيدر والفوتر
+===================================================================== */
+
+// عناصر القائمة: [مفتاح الصفحة، الملف، مفتاح النص]
 const NAV = [
-    ['home', 'index.html', 'nHome'], ['catalog', 'catalog.html', 'nShop'], ['embroidery', 'embroidery.html', 'nEmb'],
-    ['pottery', 'pottery.html', 'nPot'], ['story', 'story.html', 'nStory']
+    ['home', 'index.html', 'nHome'],
+    ['catalog', 'catalog.html', 'nShop'],
+    ['embroidery', 'embroidery.html', 'nEmb'],
+    ['pottery', 'pottery.html', 'nPot'],
+    ['story', 'story.html', 'nStory']
 ];
 
-const brandHTML = (cls = 'brand') => `
-    <a class="${cls}" href="${U('index.html')}">
+function brandHTML(className = 'brand') {
+    return `
+    <a class="${className}" href="${U('index.html')}">
         <span class="brand-mark">${t('mark')}</span>
         <span><b>KANAAN</b><small>${t('tagline')}</small></span>
     </a>`;
+}
 
 function paintHeader() {
     const host = $('#site-header');
     if (!host) return;
+
+    let navLinks = '';
+    for (const item of NAV) {
+        navLinks += `<a data-nav="${item[0]}" href="${U(item[1])}">${t(item[2])}</a>`;
+    }
+
     host.innerHTML = `
         <div class="topline"><div class="container topinner"><span>${t('top1')}</span><span>${t('top2')}</span></div></div>
         <header class="site-header">
             <div class="container nav">
-                <button class="tool menu-toggle" id="menu-toggle" type="button" aria-label="${t('menu')}" aria-expanded="false">${IC.menu}</button>
+                <button class="tool menu-toggle" id="menu-toggle" type="button" aria-label="${t('menu')}" aria-expanded="false">${ICONS.menu}</button>
                 ${brandHTML()}
-                <nav class="main-nav" id="main-nav">
-                    ${NAV.map(([key, file, label]) => `<a data-nav="${key}" href="${U(file)}">${t(label)}</a>`).join('')}
-                </nav>
+                <nav class="main-nav" id="main-nav">${navLinks}</nav>
                 <div class="nav-tools">
                     <a class="tool admin-shortcut" id="admin-shortcut" href="${U('admin/dashboard.html')}" hidden>✦ ${t('dAdmin')}</a>
-                    <button class="tool lang-btn" id="lang-btn" type="button" aria-label="${t('langAria')}">${IC.globe}<span>${t('langTo')}</span></button>
+                    <button class="tool lang-btn" id="lang-btn" type="button" aria-label="${t('langAria')}">${ICONS.globe}<span>${t('langTo')}</span></button>
                     <div class="acct" id="acct"></div>
-                    <a class="tool cart-btn" id="cart-link" href="${U('cart.html')}" aria-label="${t('cartL')}">${IC.bag}<span class="tool-label">${t('cartL')}</span><i id="cart-count" hidden>0</i></a>
+                    <a class="tool cart-btn" id="cart-link" href="${U('cart.html')}" aria-label="${t('cartL')}">${ICONS.bag}<span class="tool-label">${t('cartL')}</span><i id="cart-count" hidden>0</i></a>
                 </div>
             </div>
         </header>`;
+
     paintTools();
     paintNav();
 }
 
-/** Updates the cart badge, admin shortcut and account menu. */
+// تحديث عدّاد السلة + زر الأدمن + قائمة الحساب
 function paintTools() {
     const badge = $('#cart-count');
-    if (badge) { badge.textContent = S.count; badge.hidden = !S.count; }
+    if (badge) {
+        badge.textContent = cartCount;
+        badge.hidden = !cartCount;
+    }
 
-    const adminLink = $('#admin-shortcut');
-    const isAdmin = S.user?.role === 'admin';
-    if (adminLink) adminLink.hidden = !isAdmin;
+    const adminShortcut = $('#admin-shortcut');
+    if (adminShortcut) adminShortcut.hidden = !isAdmin();
 
     const box = $('#acct');
     if (!box) return;
 
-    if (!S.user) {
-        box.innerHTML = `<a class="tool tool-login" href="${U('login.html')}" aria-label="${t('signIn')}">${IC.user}<span class="tool-label">${t('signIn')}</span></a>`;
+    // مش مسجّل دخول
+    if (!currentUser) {
+        box.innerHTML = `<a class="tool tool-login" href="${U('login.html')}" aria-label="${t('signIn')}">${ICONS.user}<span class="tool-label">${t('signIn')}</span></a>`;
         return;
     }
 
-    const first = esc(String(S.user.name || t('myAcc')).split(' ')[0]);
+    // مسجّل دخول
+    const firstName = esc(String(currentUser.name || t('myAcc')).split(' ')[0]);
+    const adminItem = when(isAdmin(), `<a href="${U('admin/dashboard.html')}">${t('dAdmin')}</a>`);
+
     box.innerHTML = `
-        <button class="tool tool-login" id="acct-btn" type="button" aria-haspopup="true" aria-expanded="false">${IC.user}<span class="tool-label">${first}</span></button>
+        <button class="tool tool-login" id="acct-btn" type="button" aria-haspopup="true" aria-expanded="false">${ICONS.user}<span class="tool-label">${firstName}</span></button>
         <div class="acct-menu" id="acct-menu" hidden>
-            <small>${esc(S.user.name || '')}</small>
+            <small>${esc(currentUser.name || '')}</small>
             <a href="${U('customer/profile.html')}">${t('fProfile')}</a>
             <a href="${U('customer/orders.html')}">${t('fOrders')}</a>
-            ${isAdmin ? `<a href="${U('admin/dashboard.html')}">${t('dAdmin')}</a>` : ''}
+            ${adminItem}
             <button type="button" id="logout">${t('dOut')}</button>
         </div>`;
 }
 
+// نلوّن رابط الصفحة الحالية بالقائمة
 function paintNav() {
     const page = document.body.dataset.page;
-    $$('#main-nav a').forEach(a => a.classList.toggle('active', a.dataset.nav === page));
+    for (const link of $$('#main-nav a')) {
+        link.classList.toggle('active', link.dataset.nav === page);
+    }
+}
+
+// عمود بالفوكتر: عنوان + روابط [[ملف، مفتاح نص], ...]
+function footerLinks(titleKey, links) {
+    let html = `<h4>${t(titleKey)}</h4>`;
+    for (const link of links) {
+        html += `<a href="${U(link[0])}">${t(link[1])}</a>`;
+    }
+    return `<div>${html}</div>`;
 }
 
 function paintFooter() {
     const host = $('#site-footer');
     if (!host) return;
+
+    const discover = footerLinks('fDisc', [
+        ['catalog.html', 'fAll'],
+        ['story.html', 'nStory'],
+        ['customer/orders.html', 'fOrders']
+    ]);
+    const service = footerLinks('fServ', [
+        ['cart.html', 'fCart'],
+        ['login.html', 'signIn'],
+        ['register.html', 'fReg']
+    ]);
+
     host.innerHTML = `
         <footer class="site-footer">
             <div class="container footer-grid">
                 <div>${brandHTML('brand footer-brand')}<p>${t('fAbout')}</p></div>
-                <div><h4>${t('fDisc')}</h4>
-                    <a href="${U('catalog.html')}">${t('fAll')}</a>
-                    <a href="${U('story.html')}">${t('nStory')}</a>
-                    <a href="${U('customer/orders.html')}">${t('fOrders')}</a></div>
-                <div><h4>${t('fServ')}</h4>
-                    <a href="${U('cart.html')}">${t('fCart')}</a>
-                    <a href="${U('login.html')}">${t('signIn')}</a>
-                    <a href="${U('register.html')}">${t('fReg')}</a></div>
+                ${discover}
+                ${service}
                 <div><h4>${t('fTouch')}</h4><p>${t('fTouchP')}</p><span class="footer-note">${t('madeIn')}</span></div>
             </div>
             <div class="copyright">${t('rights')}</div>
         </footer>`;
 }
 
-function setLang(lang) {
-    S.lang = lang;
-    store.set('kn_lang', lang);
+// اللغة واتجاه الصفحة
+function applyDocumentLang() {
+    document.documentElement.lang = lang;
+    if (isArabic()) {
+        document.documentElement.dir = 'rtl';
+    } else {
+        document.documentElement.dir = 'ltr';
+    }
+}
+
+// تبديل اللغة بدون إعادة تحميل
+function setLang(newLang) {
+    lang = newLang;
+    storeSet('kn_lang', newLang);
     applyDocumentLang();
     paintHeader();
     paintFooter();
     render(true);
 }
 
-function applyDocumentLang() {
-    document.documentElement.lang = S.lang;
-    document.documentElement.dir  = S.lang === 'ar' ? 'rtl' : 'ltr';
-}
 
-/* ---------------------------------------------------------------------
-   6. Components
---------------------------------------------------------------------- */
-function pcard(p) {
+/* =====================================================================
+   6) مكونات صغيرة مشتركة (كل وحدة بترجّع HTML)
+===================================================================== */
+
+// كرت منتج
+function productCard(p) {
     const href = U('product-detail.html?id=' + encodeURIComponent(p.id));
-    const out  = Number(p.stock) < 1;
+    const soldOut = Number(p.stock) < 1;
+
     return `
-    <article class="pcard${out ? ' soldout' : ''}">
-        <a class="pcard-img" href="${href}">${imgTag(imageFor(p), p.name)}${out ? `<span class="pcard-flag">${t('sold')}</span>` : ''}</a>
+    <article class="pcard${when(soldOut, ' soldout')}">
+        <a class="pcard-img" href="${href}">${imgTag(imageFor(p), p.name)}${when(soldOut, `<span class="pcard-flag">${t('sold')}</span>`)}</a>
         <div class="pcard-body">
-            <span class="pcard-cat">${esc(catLabel(p.category_name))}</span>
+            <span class="pcard-cat">${esc(categoryLabel(p.category_name))}</span>
             <h3><a href="${href}">${esc(p.name)}</a></h3>
             <div class="pcard-foot">
                 <b>${money(p.price)}</b>
-                <button class="add-quick" type="button" data-add="${p.id}" ${out ? 'disabled' : ''} aria-label="${t('add')}">${IC.bag}</button>
+                <button class="add-quick" type="button" data-add="${p.id}" ${when(soldOut, 'disabled')} aria-label="${t('add')}">${ICONS.bag}</button>
             </div>
         </div>
     </article>`;
 }
 
-const productGrid = (items, emptyKey) =>
-    `<div class="grid">${items.map(pcard).join('') || `<p class="muted">${t(emptyKey)}</p>`}</div>`;
+// شبكة منتجات (وإذا فاضية بنعرض رسالة emptyKey)
+function productGrid(items, emptyKey) {
+    let cardsHtml = items.map(productCard).join('');
+    if (!cardsHtml) cardsHtml = `<p class="muted">${t(emptyKey)}</p>`;
+    return `<div class="grid">${cardsHtml}</div>`;
+}
 
-const sec = (eye, title, link = '') => `
-    <div class="sec-head"><div>${eye ? `<span class="eyebrow">${eye}</span>` : ''}<h2>${title}</h2></div>${link}</div>`;
+// عنوان قسم (eyebrow اختياري + رابط اختياري)
+function sectionHead(eyebrow, title, link = '') {
+    const eyebrowHtml = when(eyebrow, `<span class="eyebrow">${eyebrow}</span>`);
+    return `<div class="sec-head"><div>${eyebrowHtml}<h2>${title}</h2></div>${link}</div>`;
+}
 
-const viewAllLink = `<a class="link-line" href="${U('catalog.html')}">${t('viewAll')}</a>`;
+function viewAllLink() {
+    return `<a class="link-line" href="${U('catalog.html')}">${t('viewAll')}</a>`;
+}
 
-const empty = (title, text, btn = '') => `
-    <div class="empty"><div class="empty-ic">${IC.bag}</div><h2>${title}</h2>${text ? `<p>${text}</p>` : ''}${btn}</div>`;
+// قسم منتجات كامل (بالرئيسية وصفحات الحرف)
+function shopSection(className, eyebrow, title, items, emptyKey, link = '') {
+    return `
+    <section class="${className}"><div class="container section">
+        ${sectionHead(eyebrow, title, link)}
+        ${productGrid(items, emptyKey)}
+    </div></section>`;
+}
 
-const stepper = (id, value, max) => `
-    <div class="stepper" data-step-for="${id}">
-        <button type="button" data-step="-1" aria-label="-">${IC.minus}</button>
-        <input id="qty-${id}" type="number" min="1" max="${max}" value="${value}" inputmode="numeric" aria-label="${t('qty')}">
-        <button type="button" data-step="1" aria-label="+">${IC.plus}</button>
+// قسم "العناية بقطعتك" (التطريز والفخار)
+function careSection(className, prefix) {
+    return `
+    <section class="${className} container section">
+        ${sectionHead('', t('crCare'))}
+        <div class="care">${cards(prefix)}</div>
+    </section>`;
+}
+
+// n بطاقات بنصوص مرقّمة: prefix='sK' => sK1/sK1p ، sK2/sK2p ، ...
+// (الحرف p = الفقرة الوصفية)
+function cards(prefix, tag = 'article', count = 3) {
+    let html = '';
+    for (let i = 1; i <= count; i++) {
+        html += `<${tag}><h3>${t(prefix + i)}</h3><p>${t(prefix + i + 'p')}</p></${tag}>`;
+    }
+    return html;
+}
+
+// قائمة بعلامة صح (ميزات المنتج، مزايا التسجيل)
+function checkList(keys, className) {
+    let items = '';
+    for (const key of keys) {
+        items += `<li>${ICONS.check}${t(key)}</li>`;
+    }
+    return `<ul class="${className}">${items}</ul>`;
+}
+
+// صندوق "فاضي" مع زر اختياري
+function emptyBox(title, text, button = '') {
+    return `
+    <div class="empty">
+        <div class="empty-ic">${ICONS.bag}</div>
+        <h2>${title}</h2>
+        ${when(text, `<p>${text}</p>`)}
+        ${button}
     </div>`;
+}
 
-/** "Sign in / create account" prompt shown to guests. */
-const guestPrompt = (wrapClass, title, text) => `
-    <section class="container ${wrapClass}">${empty(title, text, `
+// زر "متابعة التسوق" (بنستخدمه بأكثر من مكان)
+function shopButton() {
+    return `<a class="btn btn-dark" href="${U('catalog.html')}">${t('continueShop')}</a>`;
+}
+
+// عدّاد الكمية (+ / -)
+function stepper(id, value, max) {
+    return `
+    <div class="stepper" data-step-for="${id}">
+        <button type="button" data-step="-1" aria-label="-">${ICONS.minus}</button>
+        <input id="qty-${id}" type="number" min="1" max="${max}" value="${value}" inputmode="numeric" aria-label="${t('qty')}">
+        <button type="button" data-step="1" aria-label="+">${ICONS.plus}</button>
+    </div>`;
+}
+
+// رسالة للزائر: "سجّل دخول أو أنشئ حساب" (ونحفظ وين كان رايح)
+function guestPrompt(wrapClass, title, text, nextPage) {
+    storeSet('kn_next', nextPage);
+    const buttons = `
         <div class="d-btns">
             <a class="btn btn-dark" href="${U('login.html')}">${t('signIn')}</a>
             <a class="btn btn-ghost" href="${U('register.html')}">${t('fReg')}</a>
-        </div>`)}</section>`;
+        </div>`;
+    return `<section class="container ${wrapClass}">${emptyBox(title, text, buttons)}</section>`;
+}
 
-const statusChip = st => `<b class="st st-${esc(st)}">${t('st' + st)}</b>`;
+// شارة حالة الطلب: status = Pending / Processing / ...
+function statusChip(status) {
+    return `<b class="st st-${esc(status)}">${t('st' + status)}</b>`;
+}
 
+// كرت تفاصيل الطلب
 function orderCard(o) {
-    const lines = (o.items || []).map(i =>
-        `<div class="r-line"><span>${esc(i.product_name)} × ${i.quantity}</span><b>${money(i.unit_price * i.quantity)}</b></div>`).join('');
+    let lines = '';
+    for (const item of o.items || []) {
+        lines += `<div class="r-line"><span>${esc(item.product_name)} × ${item.quantity}</span><b>${money(item.unit_price * item.quantity)}</b></div>`;
+    }
+
     return `
     <div class="r-paper">
-        <div class="r-meta"><span>${t('rNo')}: <b>#${esc(o.id)}</b></span><span>${t('rDate')}: <b>${fdate(o.created_at)}</b></span></div>
+        <div class="r-meta"><span>${t('rNo')}: <b>#${esc(o.id)}</b></span><span>${t('rDate')}: <b>${formatDate(o.created_at)}</b></span></div>
         <div class="r-meta"><span>${t('rStatus')}: ${statusChip(o.status)}</span><span>${t('rPay')}: <b>${t('pay' + o.payment_status)} · ${t('rCod')}</b></span></div>
         <div class="r-to"><span>${t('rTo')}</span><b>${esc(o.full_name)} · ${esc(o.phone)}</b><small>${esc(o.city)}, ${esc(o.address)}</small></div>
         ${lines}
         <div class="r-line r-total"><span>${t('total')}</span><b>${money(o.total)}</b></div>
-        ${o.notes ? `<small class="muted">${t('notes')}: ${esc(o.notes)}</small>` : ''}
+        ${when(o.notes, `<small class="muted">${t('notes')}: ${esc(o.notes)}</small>`)}
         <div class="r-actions"><button class="btn btn-ghost" type="button" data-print>${t('rPrint')}</button></div>
     </div>`;
 }
 
-/** Three-card block used by story / craft / care sections: keys prefix+1..3 and prefix+i+'p'. */
-const cards = (prefix, tag = 'article') =>
-    [1, 2, 3].map(i => `<${tag}><h3>${t(prefix + i)}</h3><p>${t(prefix + i + 'p')}</p></${tag}>`).join('');
+// زرّين لصفحات الحرف: تسوّق هالتصنيف / تسوّق الكل
+function craftButtons(categoryId) {
+    let shopUrl = U('catalog.html');
+    if (categoryId) shopUrl += '?category=' + categoryId;
 
-/** Shared file upload: validates, posts to the API, then calls onDone(result). */
-function bindUpload(input, msgEl, action, onDone) {
+    return `
+    <div class="d-btns">
+        <a class="btn btn-primary" href="${shopUrl}">${t('crShop')}</a>
+        <a class="btn btn-ghost" href="${U('catalog.html')}">${t('crAll')}</a>
+    </div>`;
+}
+
+// رفع صورة: نتأكد من النوع والحجم، نرسلها للسيرفر، وبعدين ننادي onDone(النتيجة)
+function bindUpload(input, messageEl, action, onDone) {
     input.onchange = async () => {
-        const file = input.files?.[0];
+        const file = input.files[0];
         if (!file) return;
+
         if (!IMAGE_TYPES.includes(file.type) || file.size > MAX_UPLOAD) {
-            msgEl.textContent = t('prBad');
+            messageEl.textContent = t('prBad');
             return;
         }
-        const fd = new FormData();
-        fd.append('image', file);
-        msgEl.textContent = t('prUp');
+
+        const formData = new FormData();
+        formData.append('image', file);
+        messageEl.textContent = t('prUp');
+
         try {
-            await onDone(await api(action, {}, fd));
+            const result = await api(action, {}, formData);
+            await onDone(result);
             input.value = '';
         } catch (e) {
-            msgEl.textContent = e.message;
+            messageEl.textContent = e.message;
         }
     };
 }
 
-/* ---------------------------------------------------------------------
-   7. Views — each returns { html, bind?, redirect? }
---------------------------------------------------------------------- */
+
+/* =====================================================================
+   7) الصفحات
+   كل صفحة بترجّع كائن: { html, bind?, redirect? }
+   - html: محتوى الصفحة
+   - bind: دالة بتربط الأزرار بعد ما HTML ينحط
+   - redirect: اسم صفحة نحوّل لها بدل ما نعرض شي
+===================================================================== */
+
+/* ---------- الرئيسية ---------- */
+function categoryCard(c) {
+    return `
+    <a class="h-cat" href="${U('catalog.html?category=' + c.id)}">
+        ${imgTag(imageFor({ name: c.name, image: c.image }), c.name)}
+        <span><b>${esc(categoryLabel(c.name))}</b><i>${t('explore')}</i></span>
+    </a>`;
+}
+
 async function vHome() {
-    const [cats, prods] = await Promise.all([api('categories'), api('products')]);
-    S.cats = cats.items || [];
+    const results = await Promise.all([loadCategories(), api('products')]);
+    const products = (results[1].items || []).slice(0, 8);
+    const collections = categories.slice(0, 3).map(categoryCard).join('');
 
-    const collections = S.cats.slice(0, 3).map(c => `
-        <a class="h-cat" href="${U('catalog.html?category=' + c.id)}">
-            ${imgTag(imageFor({ name: c.name, image: c.image }), c.name)}
-            <span><b>${esc(catLabel(c.name))}</b><i>${t('explore')}</i></span>
-        </a>`).join('');
-
-    return {
-        html: `
+    const html = `
         <section class="h-hero">
-            <video class="h-video" src="${VIDEO}" poster="${IMG.tatreez}" autoplay muted loop playsinline preload="metadata"></video>
+            <video class="h-video" src="${VIDEO}" poster="${IMAGES.tatreez}" autoplay muted loop playsinline preload="metadata"></video>
             <div class="h-shade"></div>
             <div class="container h-inner">
                 <span class="eyebrow">${t('hEye')}</span>
                 <h1>${t('hH1')}<br><em>${t('hH2')}</em></h1>
                 <p>${t('hP')}</p>
                 <div class="h-actions">
-                    <a class="btn btn-primary" href="${U('catalog.html')}">${t('hCta')}${arrowSpan}</a>
+                    <a class="btn btn-primary" href="${U('catalog.html')}">${t('hCta')}${ARROW_SPAN}</a>
                     <a class="btn btn-ghost-light" href="${U('story.html')}">${t('hStory')}</a>
                 </div>
             </div>
@@ -587,65 +840,93 @@ async function vHome() {
         </section>
         <section class="container h-strip"><span>${t('hS1')}</span><span>${t('hS2')}</span><span>${t('hS3')}</span></section>
         <section class="container section">
-            ${sec(t('hColEye'), t('hCol'), viewAllLink)}
+            ${sectionHead(t('hColEye'), t('hCol'), viewAllLink())}
             <div class="h-cats">${collections}</div>
         </section>
-        <section class="h-products"><div class="container section">
-            ${sec(t('hPickEye'), t('hPick'), viewAllLink)}
-            ${productGrid((prods.items || []).slice(0, 8), 'hNone')}
-        </div></section>
+        ${shopSection('h-products', t('hPickEye'), t('hPick'), products, 'hNone', viewAllLink())}
         <section class="h-story">
-            <div class="h-story-img">${imgTag(IMG.gift)}</div>
+            <div class="h-story-img">${imgTag(IMAGES.gift)}</div>
             <div class="h-story-copy">
                 <span class="eyebrow">${t('hStEye')}</span>
                 <h2>${t('hStH')}<br><em>${t('hStH2')}</em></h2>
                 <p>${t('hStP')}</p>
-                <a class="btn btn-dark" href="${U('story.html')}">${t('hStory')}${arrowSpan}</a>
+                <a class="btn btn-dark" href="${U('story.html')}">${t('hStory')}${ARROW_SPAN}</a>
                 <div class="h-sign">${t('hStSign')}</div>
             </div>
         </section>
-        <section class="h-quote"><p>${t('hQuote')}</p><small>KANAAN</small></section>`,
-        bind() {
-            const video = $('.h-video');
-            if (video && matchMedia('(prefers-reduced-motion: reduce)').matches) video.pause();
-        }
-    };
+        <section class="h-quote"><p>${t('hQuote')}</p><small>KANAAN</small></section>`;
+
+    function bind() {
+        // إذا المستخدم مفعّل "تقليل الحركة" نوقف الفيديو
+        const video = $('.h-video');
+        if (video && matchMedia('(prefers-reduced-motion: reduce)').matches) video.pause();
+    }
+
+    return { html: html, bind: bind };
 }
 
-async function vCatalog(q) {
-    const f = { category: q.get('category') || '', q: q.get('q') || '', sort: q.get('sort') || 'new' };
+/* ---------- الكتالوج (بحث + تصنيف + ترتيب) ---------- */
+async function vCatalog(params) {
+    // الفلاتر الحالية (من الرابط)
+    const filters = {
+        category: params.get('category') || '',
+        q: params.get('q') || '',
+        sort: params.get('sort') || 'new'
+    };
 
-    const [cats, prods] = await Promise.all([
-        api('categories'),
-        api('products', { q: f.q, category: f.category })
+    const results = await Promise.all([
+        loadCategories(),
+        api('products', { q: filters.q, category: filters.category })
     ]);
-    S.cats = cats.items || [];
-    let items = prods.items || [];
+    let items = results[1].items || [];
 
-    const sorted = () => {
+    // نسخة مرتّبة من المنتجات (الترتيب بالمتصفح، مش بالسيرفر)
+    function sortedItems() {
         const list = [...items];
-        if (f.sort === 'low')  list.sort((a, b) => a.price - b.price);
-        if (f.sort === 'high') list.sort((a, b) => b.price - a.price);
+        if (filters.sort === 'low') list.sort((a, b) => a.price - b.price);
+        if (filters.sort === 'high') list.sort((a, b) => b.price - a.price);
         return list;
-    };
+    }
 
-    /** Catalog URL for the current filters, optionally overridden. */
-    const urlFor = (next = {}) => {
-        const params = new URLSearchParams();
-        Object.entries({ ...f, ...next }).forEach(([k, v]) => {
-            if (v && !(k === 'sort' && v === 'new')) params.set(k, v);
-        });
-        const qs = params.toString();
-        return U('catalog.html') + (qs ? '?' + qs : '');
-    };
+    // رابط الكتالوج بالفلاتر الحالية، مع إمكانية تغيير بعضها
+    function urlFor(changes = {}) {
+        const all = Object.assign({}, filters, changes);
+        const query = new URLSearchParams();
+        for (const key in all) {
+            const value = all[key];
+            if (!value) continue;                              // نتجاهل الفاضي
+            if (key === 'sort' && value === 'new') continue;   // 'new' هو الافتراضي
+            query.set(key, value);
+        }
+        const text = query.toString();
+        if (text) return U('catalog.html') + '?' + text;
+        return U('catalog.html');
+    }
 
-    const gridHTML = () => sorted().map(pcard).join('') || `<p class="empty-line">${t('cNone')}</p>`;
-    const sortOption = (value, key) => `<option value="${value}" ${f.sort === value ? 'selected' : ''}>${t(key)}</option>`;
-    const chip = (id, label) =>
-        `<a class="chip ${String(f.category) === String(id) ? 'active' : ''}" data-category="${esc(id)}" href="${urlFor({ category: id })}">${label}</a>`;
+    function gridHTML() {
+        const html = sortedItems().map(productCard).join('');
+        if (html) return html;
+        return `<p class="empty-line">${t('cNone')}</p>`;
+    }
 
-    return {
-        html: `
+    function isActiveCategory(id) {
+        return String(filters.category) === String(id);
+    }
+
+    function sortOption(value, textKey) {
+        return `<option value="${value}" ${when(filters.sort === value, 'selected')}>${t(textKey)}</option>`;
+    }
+
+    function chip(id, label) {
+        return `<a class="chip ${when(isActiveCategory(id), 'active')}" data-category="${esc(id)}" href="${urlFor({ category: id })}">${label}</a>`;
+    }
+
+    let chips = chip('', t('cAll'));
+    for (const c of categories) {
+        chips += chip(c.id, esc(categoryLabel(c.name)));
+    }
+
+    const html = `
         <section class="c-head container">
             <span class="eyebrow">${t('cEye')}</span>
             <h1>${t('cH')}</h1>
@@ -653,225 +934,297 @@ async function vCatalog(q) {
         </section>
         <section class="container c-tools">
             <form class="c-search" id="c-search">
-                <input name="q" type="search" value="${esc(f.q)}" placeholder="${t('cSearch')}" aria-label="${t('cGo')}">
+                <input name="q" type="search" value="${esc(filters.q)}" placeholder="${t('cSearch')}" aria-label="${t('cGo')}">
                 <button class="btn btn-dark" type="submit">${t('cGo')}</button>
             </form>
             <select id="c-sort" aria-label="sort">
                 ${sortOption('new', 'sNew')}${sortOption('low', 'sLow')}${sortOption('high', 'sHigh')}
             </select>
         </section>
-        <nav class="container chips" id="catalog-chips" aria-label="categories">
-            ${chip('', t('cAll'))}
-            ${S.cats.map(c => chip(c.id, esc(catLabel(c.name)))).join('')}
-        </nav>
+        <nav class="container chips" id="catalog-chips" aria-label="categories">${chips}</nav>
         <section class="container c-grid-wrap">
             <div class="grid grid-3 catalog-products" id="catalog-products">${gridHTML()}</div>
-        </section>`,
+        </section>`;
 
-        bind() {
-            const form  = $('#c-search');
-            const input = $('input[name="q"]', form);
-            const select = $('#c-sort');
-            const chips = $('#catalog-chips');
-            const grid  = $('#catalog-products');
-            const count = $('#catalog-count');
-            let requestId = 0;
+    function bind() {
+        const form = $('#c-search');
+        const input = $('input[name="q"]', form);
+        const select = $('#c-sort');
+        const chipsBox = $('#catalog-chips');
+        const grid = $('#catalog-products');
+        const count = $('#catalog-count');
+        let requestId = 0;   // رقم لكل طلب بحث
 
-            const syncAddress = () => history.replaceState(history.state, '', urlFor());
-
-            const paintGrid = () => {
-                grid.innerHTML = gridHTML();
-                grid.classList.remove('is-filtering', 'filter-updated');
-                void grid.offsetWidth;                       // restart the CSS animation
-                grid.classList.add('filter-updated');
-                count.textContent = `${items.length} ${t('cCount')}`;
-            };
-
-            const paintChips = () => $$('[data-category]', chips).forEach(a => {
-                const active = String(a.dataset.category) === String(f.category);
-                a.classList.toggle('active', active);
-                active ? a.setAttribute('aria-current', 'true') : a.removeAttribute('aria-current');
-            });
-
-            const reload = async changes => {
-                Object.assign(f, changes);
-                input.value = f.q;
-                select.value = f.sort;
-                paintChips();
-                syncAddress();
-
-                const current = ++requestId;
-                grid.classList.add('is-filtering');
-                try {
-                    const res = await api('products', { q: f.q, category: f.category });
-                    if (current !== requestId) return;
-                    items = res.items || [];
-                    paintGrid();
-                } catch (err) {
-                    if (current !== requestId) return;
-                    grid.classList.remove('is-filtering');
-                    grid.innerHTML = `<p class="empty-line">${esc(err.message || t('errGen'))}</p>`;
-                    count.textContent = `0 ${t('cCount')}`;
-                }
-            };
-
-            form.addEventListener('submit', e => {
-                e.preventDefault();
-                reload({ q: input.value.trim() });
-            });
-
-            select.addEventListener('change', () => {
-                f.sort = select.value;
-                syncAddress();
-                paintGrid();                                 // sorting is client-side
-            });
-
-            chips.addEventListener('click', e => {
-                const link = e.target.closest('a[data-category]');
-                if (!link) return;
-                e.preventDefault();
-                reload({ category: link.dataset.category });
-            });
+        // نحدّث الرابط بشريط العنوان بدون إعادة تحميل ولا سجل جديد
+        function syncAddress() {
+            history.replaceState(history.state, '', urlFor());
         }
-    };
+
+        function paintCount() {
+            count.textContent = items.length + ' ' + t('cCount');
+        }
+
+        function paintGrid() {
+            grid.innerHTML = gridHTML();
+            grid.classList.remove('is-filtering', 'filter-updated');
+            void grid.offsetWidth;   // حيلة: بتجبر المتصفح يعيد حساب التصميم عشان الأنيميشن يبدأ من جديد
+            grid.classList.add('filter-updated');
+            paintCount();
+        }
+
+        function paintChips() {
+            for (const link of $$('[data-category]', chipsBox)) {
+                const active = isActiveCategory(link.dataset.category);
+                link.classList.toggle('active', active);
+                if (active) {
+                    link.setAttribute('aria-current', 'true');
+                } else {
+                    link.removeAttribute('aria-current');
+                }
+            }
+        }
+
+        // نجيب المنتجات من جديد بعد تغيير البحث أو التصنيف
+        async function reload(changes) {
+            Object.assign(filters, changes);
+            input.value = filters.q;
+            select.value = filters.sort;
+            paintChips();
+            syncAddress();
+
+            requestId++;
+            const myRequest = requestId;
+            grid.classList.add('is-filtering');
+
+            try {
+                const res = await api('products', { q: filters.q, category: filters.category });
+                if (myRequest !== requestId) return;   // في طلب أحدث، نتجاهل هاد الرد القديم
+                items = res.items || [];
+                paintGrid();
+            } catch (err) {
+                if (myRequest !== requestId) return;
+                grid.classList.remove('is-filtering');
+                grid.innerHTML = `<p class="empty-line">${esc(err.message || t('errGen'))}</p>`;
+                items = [];
+                paintCount();
+            }
+        }
+
+        form.addEventListener('submit', e => {
+            e.preventDefault();
+            reload({ q: input.value.trim() });
+        });
+
+        select.addEventListener('change', () => {
+            filters.sort = select.value;
+            syncAddress();
+            paintGrid();   // الترتيب بالمتصفح
+        });
+
+        chipsBox.addEventListener('click', e => {
+            const link = e.target.closest('a[data-category]');
+            if (!link) return;
+            e.preventDefault();
+            reload({ category: link.dataset.category });
+        });
+    }
+
+    return { html: html, bind: bind };
 }
 
-async function vProduct(q) {
-    const { item: p } = await api('product', { id: q.get('id') });
+/* ---------- صفحة المنتج ---------- */
+async function vProduct(params) {
+    const p = (await api('product', { id: params.get('id') })).item;
 
+    // منتجات مشابهة (من نفس التصنيف، بدون المنتج نفسه)
     let related = [];
     try {
-        related = ((await api('products', { category: p.category_id })).items || [])
-            .filter(x => x.id != p.id)
-            .slice(0, 4);
-    } catch {}
+        const res = await api('products', { category: p.category_id });
+        related = (res.items || []).filter(x => x.id != p.id).slice(0, 4);
+    } catch (e) { }
 
-    const out = Number(p.stock) < 1;
+    const soldOut = Number(p.stock) < 1;
     const max = Math.max(1, Number(p.stock) || 1);
 
-    const artisan = p.artisan_name ? `
+    // قسم الحرفي (إذا موجود)
+    let artisan = '';
+    if (p.artisan_name) {
+        artisan = `
         <div class="p-artisan">
             <span class="eyebrow">${t('pArt')}</span><b>${esc(p.artisan_name)}</b>
-            ${p.artisan_story ? `<p>${esc(p.artisan_story)}</p>` : ''}
-        </div>` : '';
+            ${when(p.artisan_story, `<p>${esc(p.artisan_story)}</p>`)}
+        </div>`;
+    }
 
-    return {
-        html: `
+    let stockText = '—';
+    if (p.stock != null) stockText = p.stock;
+
+    let relatedHtml = '';
+    if (related.length) {
+        relatedHtml = `<section class="container section p-rel">${sectionHead('', t('pRel'))}<div class="grid">${related.map(productCard).join('')}</div></section>`;
+    }
+
+    const html = `
         <section class="container p-wrap">
             <div class="p-gallery"><div class="p-frame">${imgTag(imageFor(p), p.name)}</div></div>
             <div class="p-info">
-                <nav class="crumbs"><a href="${U('index.html')}">${t('pHome')}</a> / <a href="${U('catalog.html')}">${t('pShop')}</a> / ${esc(p.name)}</nav>
-                <span class="eyebrow">${esc(catLabel(p.category_name))}</span>
+                <nav class="crumbs"><a href="${U('index.html')}">${t('nHome')}</a> / <a href="${U('catalog.html')}">${t('pShop')}</a> / ${esc(p.name)}</nav>
+                <span class="eyebrow">${esc(categoryLabel(p.category_name))}</span>
                 <h1>${esc(p.name)}</h1>
                 <div class="p-price">${money(p.price)}</div>
                 <p class="p-desc">${esc(p.description || t('pDescDef'))}</p>
-                <ul class="p-facts">${['pF1', 'pF2', 'pF3'].map(k => `<li>${IC.check}${t(k)}</li>`).join('')}</ul>
+                ${checkList(['pF1', 'pF2', 'pF3'], 'p-facts')}
                 ${artisan}
                 <div class="p-buy">
                     ${stepper(p.id, 1, max)}
-                    <button class="btn btn-primary" id="p-add" type="button" ${out ? 'disabled' : ''}>${out ? t('sold') : t('add')}</button>
-                    <button class="btn btn-ghost" id="p-now" type="button" ${out ? 'disabled' : ''}>${t('pBuy')}</button>
+                    <button class="btn btn-primary" id="p-add" type="button" ${when(soldOut, 'disabled')}>${soldOut ? t('sold') : t('add')}</button>
+                    <button class="btn btn-ghost" id="p-now" type="button" ${when(soldOut, 'disabled')}>${t('pBuy')}</button>
                 </div>
-                <small class="muted">${t('pStock')}: ${esc(p.stock ?? '—')}</small>
+                <small class="muted">${t('pStock')}: ${esc(stockText)}</small>
             </div>
         </section>
-        ${related.length ? `<section class="container section p-rel">${sec('', t('pRel'))}<div class="grid">${related.map(pcard).join('')}</div></section>` : ''}`,
+        ${relatedHtml}`;
 
-        bind() {
-            const qty = () => Math.min(max, Math.max(1, parseInt($(`#qty-${p.id}`).value, 10) || 1));
-            $('#p-add').onclick = () => addToCart(p.id, qty());
-            $('#p-now').onclick = async () => { if (await addToCart(p.id, qty())) nav('checkout.html'); };
+    function bind() {
+        // الكمية لازم تكون بين 1 وأقصى مخزون (إذا المدخل مش رقم نرجع 1)
+        function getQty() {
+            const value = parseInt($('#qty-' + p.id).value, 10) || 1;
+            return Math.min(max, Math.max(1, value));
         }
-    };
+
+        $('#p-add').onclick = () => addToCart(p.id, getQty());
+
+        // "اشترِ الآن": نضيف للسلة وإذا نجحت نروح للدفع
+        $('#p-now').onclick = async () => {
+            const ok = await addToCart(p.id, getQty());
+            if (ok) nav('checkout.html');
+        };
+    }
+
+    return { html: html, bind: bind };
+}
+
+/* ---------- السلة ---------- */
+function cartRow(x) {
+    const href = U('product-detail.html?id=' + x.id);
+    return `
+    <div class="l-row">
+        <a class="l-thumb" href="${href}">${imgTag(imageFor(x), x.name)}</a>
+        <div class="l-name"><a href="${href}">${esc(x.name)}</a><small>${money(x.price)} ${t('kEach')}</small></div>
+        <div class="stepper sm" data-line="${x.id}" data-stock="${x.stock}" data-qty="${x.qty}">
+            <button type="button" data-chg="-1" aria-label="-">${ICONS.minus}</button><span>${x.qty}</span><button type="button" data-chg="1" aria-label="+">${ICONS.plus}</button>
+        </div>
+        <span class="l-dots"></span>
+        <b class="l-sub">${money(x.subtotal)}</b>
+        <button class="l-del" type="button" data-del="${x.id}" aria-label="${t('remove')}">${ICONS.trash}</button>
+    </div>`;
 }
 
 async function vCart() {
     const cart = await api('cart');
     const items = cart.items || [];
 
+    // سلة فاضية
     if (!items.length) {
         return {
-            html: `<section class="container l-wrap">${empty(t('kEmptyH'), t('kEmptyP'),
-                `<a class="btn btn-dark" href="${U('catalog.html')}">${t('continueShop')}</a>`)}</section>`
+            html: `<section class="container l-wrap">${emptyBox(t('kEmptyH'), t('kEmptyP'), shopButton())}</section>`
         };
     }
 
-    const row = x => {
-        const href = U('product-detail.html?id=' + x.id);
-        return `
-        <div class="l-row">
-            <a class="l-thumb" href="${href}">${imgTag(imageFor(x), x.name)}</a>
-            <div class="l-name"><a href="${href}">${esc(x.name)}</a><small>${money(x.price)} ${t('kEach')}</small></div>
-            <div class="stepper sm" data-line="${x.id}" data-stock="${x.stock}" data-qty="${x.qty}">
-                <button type="button" data-chg="-1" aria-label="-">${IC.minus}</button><span>${x.qty}</span><button type="button" data-chg="1" aria-label="+">${IC.plus}</button>
-            </div>
-            <span class="l-dots"></span>
-            <b class="l-sub">${money(x.subtotal)}</b>
-            <button class="l-del" type="button" data-del="${x.id}" aria-label="${t('remove')}">${IC.trash}</button>
-        </div>`;
-    };
-
-    return {
-        html: `
+    const html = `
         <section class="container l-wrap">
             <div class="l-sheet">
                 <header class="l-top">
                     <div><span class="eyebrow">${t('kEye')}</span><h1>${t('kH')}</h1></div>
                     <a class="link-line" href="${U('catalog.html')}">${t('continueShop')}</a>
                 </header>
-                <div class="l-rows">${items.map(row).join('')}</div>
+                <div class="l-rows">${items.map(cartRow).join('')}</div>
                 <footer class="l-total">
                     <div><span>${t('kItems')}</span><b>${cart.count || items.length}</b></div>
                     <div><span>${t('kShip')}</span><b>${t('kShipV')}</b></div>
                     <div class="grand"><span>${t('total')}</span><b>${money(cart.total)}</b></div>
-                    <a class="btn btn-primary btn-block" href="${U('checkout.html')}">${t('kGo')}${arrowSpan}</a>
+                    <a class="btn btn-primary btn-block" href="${U('checkout.html')}">${t('kGo')}${ARROW_SPAN}</a>
                     <p class="muted">${t('kMore')}</p>
                 </footer>
             </div>
-        </section>`,
+        </section>`;
 
-        bind() {
-            const run = async fn => {
-                try { await fn(); await refreshState(); render(true); }
-                catch (e) { toast(e.message, true); }
-            };
-
-            $$('[data-del]').forEach(btn => btn.onclick = () =>
-                run(() => api('cart-remove', {}, { id: +btn.dataset.del })));
-
-            $$('[data-chg]').forEach(btn => btn.onclick = () => {
-                const box  = btn.closest('[data-line]');
-                const id   = +box.dataset.line;
-                const next = +box.dataset.qty + +btn.dataset.chg;
-                if (next > +box.dataset.stock) return toast(t('sold'), true);
-                run(() => next > 0
-                    ? api('cart-update', {}, { id, qty: next })
-                    : api('cart-remove', {}, { id }));
-            });
+    function bind() {
+        // ننفّذ العملية، نحدّث الحالة، ونعيد رسم السلة
+        async function run(action) {
+            try {
+                await action();
+                await refreshState();
+                render(true);
+            } catch (e) {
+                toast(e.message, true);
+            }
         }
-    };
+
+        // زر الحذف
+        for (const btn of $$('[data-del]')) {
+            btn.onclick = () => run(() => api('cart-remove', {}, { id: +btn.dataset.del }));
+        }
+
+        // أزرار + و -
+        for (const btn of $$('[data-chg]')) {
+            btn.onclick = () => {
+                const box = btn.closest('[data-line]');
+                const id = +box.dataset.line;
+                const newQty = +box.dataset.qty + +btn.dataset.chg;
+
+                if (newQty > +box.dataset.stock) {
+                    toast(t('sold'), true);
+                    return;
+                }
+
+                if (newQty > 0) {
+                    run(() => api('cart-update', {}, { id: id, qty: newQty }));
+                } else {
+                    run(() => api('cart-remove', {}, { id: id }));   // الكمية صارت 0 = حذف
+                }
+            };
+        }
+    }
+
+    return { html: html, bind: bind };
+}
+
+/* ---------- إتمام الطلب ---------- */
+function inputField(name, label, type, value) {
+    return `<label class="field"><span>${label}</span><input name="${name}" type="${type}" required value="${esc(value)}"></label>`;
+}
+
+function textareaField(name, label, required) {
+    return `<label class="field wide"><span>${label}</span><textarea name="${name}" rows="3" ${when(required, 'required')}></textarea></label>`;
+}
+
+function checkoutLine(x) {
+    return `<div class="k-line">${imgTag(imageFor(x), x.name)}<span>${esc(x.name)}<small>× ${x.qty}</small></span><b>${money(x.subtotal)}</b></div>`;
+}
+
+// تحقق بسيط من بيانات التوصيل
+function isCheckoutValid(data) {
+    if (data.name.trim().length <= 2) return false;
+    if (!/^[\d+\s()-]{7,}$/.test(data.phone.trim())) return false;
+    if (!data.city.trim()) return false;
+    if (data.address.trim().length <= 4) return false;
+    return true;
 }
 
 async function vCheckout() {
     const cart = await api('cart');
     const items = cart.items || [];
+
+    // سلة فاضية: نرجع للسلة
     if (!items.length) return { redirect: 'cart.html' };
 
-    if (!S.user) {
-        store.set('kn_next', 'checkout.html');
-        return { html: guestPrompt('k-wrap', t('xLoginH'), t('xLogin')) };
+    // مش مسجّل دخول: نعرض رسالة ونحفظ وين كان رايح
+    if (!currentUser) {
+        return { html: guestPrompt('k-wrap', t('xLoginH'), t('xLogin'), 'checkout.html') };
     }
 
-    const field = (name, label, { wide, area, type, value = '' } = {}) => `
-        <label class="field ${wide ? 'wide' : ''}"><span>${label}</span>${area
-            ? `<textarea name="${name}" rows="3" ${name !== 'notes' ? 'required' : ''}></textarea>`
-            : `<input name="${name}" ${type ? `type="${type}"` : ''} required value="${esc(value)}">`}</label>`;
-
-    const summaryLine = x => `
-        <div class="k-line">${imgTag(imageFor(x), x.name)}<span>${esc(x.name)}<small>× ${x.qty}</small></span><b>${money(x.subtotal)}</b></div>`;
-
-    return {
-        html: `
+    const html = `
         <section class="container k-wrap">
             <ol class="k-steps"><li class="done">${t('xS1')}</li><li class="now">${t('xS2')}</li><li>${t('xS3')}</li></ol>
             <div class="k-grid">
@@ -879,221 +1232,338 @@ async function vCheckout() {
                     <span class="eyebrow">${t('xEye')}</span>
                     <h1>${t('xH')}</h1>
                     <div class="k-fields">
-                        ${field('name', t('xName'), { value: S.user.name })}
-                        ${field('phone', t('xPhone'), { type: 'tel' })}
-                        ${field('city', t('xCity'))}
-                        ${field('address', t('xAddr'), { area: true, wide: true })}
-                        ${field('notes', t('xNotes'), { area: true, wide: true })}
+                        ${inputField('name', t('xName'), 'text', currentUser.name)}
+                        ${inputField('phone', t('xPhone'), 'tel', '')}
+                        ${inputField('city', t('xCity'), 'text', '')}
+                        ${textareaField('address', t('xAddr'), true)}
+                        ${textareaField('notes', t('xNotes'), false)}
                     </div>
                     <div class="pay-method"><span>${t('xPay')}</span><b>✓ ${t('rCod')}</b></div>
                     <div class="form-msg" id="k-msg" role="alert"></div>
-                    <button class="btn btn-primary btn-block" type="submit">${t('xPlace')}${arrowSpan}</button>
+                    <button class="btn btn-primary btn-block" type="submit">${t('xPlace')}${ARROW_SPAN}</button>
                 </form>
                 <aside class="k-sum">
                     <h3>${t('xSum')}</h3>
-                    ${items.map(summaryLine).join('')}
+                    ${items.map(checkoutLine).join('')}
                     <div class="k-total"><span>${t('total')}</span><b>${money(cart.total)}</b></div>
                     <a class="link-line" href="${U('cart.html')}">${t('xBack')}</a>
                 </aside>
             </div>
-        </section>`,
+        </section>`;
 
-        bind() {
-            $('#k-form').onsubmit = async e => {
-                e.preventDefault();
-                const data = Object.fromEntries(new FormData(e.target));
-                const msg = $('#k-msg');
-                const btn = $('button[type=submit]', e.target);
+    function bind() {
+        $('#k-form').onsubmit = async e => {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(e.target));
+            const msg = $('#k-msg');
+            const button = $('button[type=submit]', e.target);
 
-                const valid = data.name.trim().length > 2
-                    && /^[\d+\s()-]{7,}$/.test(data.phone.trim())
-                    && data.city.trim()
-                    && data.address.trim().length > 4;
-                if (!valid) { msg.textContent = t('xErr'); return; }
+            if (!isCheckoutValid(data)) {
+                msg.textContent = t('xErr');
+                return;
+            }
 
-                btn.disabled = true;
-                msg.textContent = '';
-                try {
-                    const order = await api('orders-create', {}, data);
-                    await refreshState();
-                    nav('order-receipt.html?id=' + order.id);
-                } catch (err) {
-                    msg.textContent = err.message;
-                    btn.disabled = false;
-                }
-            };
-        }
-    };
+            button.disabled = true;
+            msg.textContent = '';
+            try {
+                const order = await api('orders-create', {}, data);
+                await refreshState();
+                nav('order-receipt.html?id=' + order.id);
+            } catch (err) {
+                msg.textContent = err.message;
+                button.disabled = false;
+            }
+        };
+    }
+
+    return { html: html, bind: bind };
 }
 
-async function vReceipt(q) {
-    if (!S.user) {
-        store.set('kn_next', 'customer/orders.html');
+/* ---------- ملخص الطلب ---------- */
+async function vReceipt(params) {
+    if (!currentUser) {
+        storeSet('kn_next', 'customer/orders.html');
         return { redirect: 'login.html' };
     }
-    let order = null;
-    try { order = (await api('order', { id: q.get('id') })).order; } catch {}
 
-    const body = order
-        ? `<div class="r-ok">${IC.check}</div><h1>${t('rH')}</h1><p>${t('rP')}</p>${orderCard(order)}`
-        : empty(t('rNone'), '', `<a class="btn btn-dark" href="${U('catalog.html')}">${t('continueShop')}</a>`);
+    let order = null;
+    try {
+        order = (await api('order', { id: params.get('id') })).order;
+    } catch (e) { }
+
+    let body;
+    if (order) {
+        body = `<div class="r-ok">${ICONS.check}</div><h1>${t('rH')}</h1><p>${t('rP')}</p>${orderCard(order)}`;
+    } else {
+        body = emptyBox(t('rNone'), '', shopButton());
+    }
+
     return { html: `<section class="container r-wrap">${body}</section>` };
 }
 
+/* ---------- طلباتي ---------- */
+function orderListCard(o) {
+    // أول 3 منتجات فقط
+    const names = (o.items || []).slice(0, 3).map(i => i.product_name + ' ×' + i.quantity).join('، ');
+
+    return `
+    <a class="o-card" href="${U('order-receipt.html?id=' + o.id)}">
+        <div><b>#${o.id}</b><small>${formatDate(o.created_at)}</small></div>
+        <p>${esc(names)}</p>
+        <div class="o-side">${statusChip(o.status)}<strong>${money(o.total)}</strong></div>
+    </a>`;
+}
+
 async function vOrders() {
-    if (!S.user) {
-        store.set('kn_next', 'customer/orders.html');
-        return { html: guestPrompt('o-wrap', t('dGuestH'), t('dGuestP')) };
+    if (!currentUser) {
+        return { html: guestPrompt('o-wrap', t('dGuestH'), t('dGuestP'), 'customer/orders.html') };
     }
 
     const list = (await api('my-orders')).items || [];
-    const card = o => `
-        <a class="o-card" href="${U('order-receipt.html?id=' + o.id)}">
-            <div><b>#${o.id}</b><small>${fdate(o.created_at)}</small></div>
-            <p>${esc((o.items || []).slice(0, 3).map(i => `${i.product_name} ×${i.quantity}`).join('، '))}</p>
-            <div class="o-side">${statusChip(o.status)}<strong>${money(o.total)}</strong></div>
-        </a>`;
+
+    let content = `<div class="o-empty">${t('oEmpty')}</div>`;
+    if (list.length) content = list.map(orderListCard).join('');
 
     return {
         html: `
         <section class="container o-wrap">
-            <span class="eyebrow">${t('oEye')}</span><h1>${t('oH')}</h1>
-            ${list.length ? list.map(card).join('') : `<div class="o-empty">${t('oEmpty')}</div>`}
+            <span class="eyebrow">${t('fOrders')}</span><h1>${t('oH')}</h1>
+            ${content}
         </section>`
     };
 }
 
-async function vAuth(isRegister) {
-    if (S.user) return { redirect: 'catalog.html' };
+/* ---------- تسجيل الدخول / إنشاء حساب ---------- */
 
-    const field = (name, label, type = 'text', extra = '') => `
-        <label class="field"><span>${label}</span>
-            <div class="pw"><input name="${name}" type="${type}" required ${extra}>
-            ${type === 'password' ? `<button type="button" class="pw-t" data-pw>${t('aShow')}</button>` : ''}</div>
-        </label>`;
+// نصوص وإعدادات كل وضع (الاثنين بيستخدموا نفس الدالة vAuth)
+const AUTH_MODES = {
+    login: {
+        action: 'login', title: 'aWelcome', subtitle: 'aWelcomeP', submit: 'aLogin',
+        question: 'aNoAcc', linkPage: 'register.html', linkText: 'fReg',
+        passwordMin: 1, passwordAutocomplete: 'current-password'
+    },
+    register: {
+        action: 'register', title: 'aCreate', subtitle: 'aCreateP', submit: 'aReg',
+        question: 'aHaveAcc', linkPage: 'login.html', linkText: 'signIn',
+        passwordMin: 8, passwordAutocomplete: 'new-password'
+    }
+};
+
+function authField(name, label, type = 'text', extra = '') {
+    const showButton = when(type === 'password', `<button type="button" class="pw-t" data-pw>${t('aShow')}</button>`);
+    return `
+    <label class="field"><span>${label}</span>
+        <div class="pw"><input name="${name}" type="${type}" required ${extra}>${showButton}</div>
+    </label>`;
+}
+
+// بعد الدخول: نروح للصفحة المحفوظة، أو لوحة الأدمن، أو الكتالوج
+function goAfterLogin() {
+    let dest = storeGet('kn_next');
+    storeSet('kn_next', '');
+
+    if (!dest) {
+        if (isAdmin()) {
+            dest = 'admin/dashboard.html';
+        } else {
+            dest = 'catalog.html';
+        }
+    }
+
+    if (dest.startsWith('admin/')) {
+        location.href = U(dest);   // الأدمن صفحة منفصلة، فنحمّلها من جديد
+    } else {
+        nav(dest);
+    }
+}
+
+async function vAuth(isRegister) {
+    // مسجّل أصلاً: ما في داعي يشوف هالصفحة
+    if (currentUser) return { redirect: 'catalog.html' };
+
+    let mode = AUTH_MODES.login;
+    if (isRegister) mode = AUTH_MODES.register;
+
+    const nameField = when(isRegister, authField('name', t('xName'), 'text', 'minlength="3" autocomplete="name"'));
+    const password2Field = when(isRegister, authField('password2', t('aPass2'), 'password', 'minlength="8" autocomplete="new-password"'));
 
     const form = `
         <form class="a-form" id="a-form" novalidate>
             <span class="eyebrow">${t('aEye')}</span>
-            <h1>${isRegister ? t('aCreate') : t('aWelcome')}</h1>
-            <p class="a-sub">${isRegister ? t('aCreateP') : t('aWelcomeP')}</p>
-            ${isRegister ? field('name', t('aName'), 'text', 'minlength="3" autocomplete="name"') : ''}
-            ${field('email', t('aEmail'), 'email', 'autocomplete="email"')}
-            ${field('password', t('aPass'), 'password', `minlength="${isRegister ? 8 : 1}" autocomplete="${isRegister ? 'new-password' : 'current-password'}"`)}
-            ${isRegister ? field('password2', t('aPass2'), 'password', 'minlength="8" autocomplete="new-password"') : ''}
+            <h1>${t(mode.title)}</h1>
+            <p class="a-sub">${t(mode.subtitle)}</p>
+            ${nameField}
+            ${authField('email', t('aEmail'), 'email', 'autocomplete="email"')}
+            ${authField('password', t('aPass'), 'password', `minlength="${mode.passwordMin}" autocomplete="${mode.passwordAutocomplete}"`)}
+            ${password2Field}
             <div class="form-msg" id="a-msg" role="alert"></div>
-            <button class="btn btn-primary btn-block" type="submit">${isRegister ? t('aReg') : t('aLogin')}</button>
-            <p class="a-switch">${isRegister ? t('aHaveAcc') : t('aNoAcc')} <a href="${U(isRegister ? 'login.html' : 'register.html')}">${isRegister ? t('signIn') : t('fReg')}</a></p>
+            <button class="btn btn-primary btn-block" type="submit">${t(mode.submit)}</button>
+            <p class="a-switch">${t(mode.question)} <a href="${U(mode.linkPage)}">${t(mode.linkText)}</a></p>
         </form>`;
 
-    const html = isRegister
-        ? `<section class="container reg-wrap">
-              <ul class="reg-perks">${['aB1', 'aB2', 'aB3'].map(k => `<li>${IC.check}${t(k)}</li>`).join('')}</ul>
-              <div class="reg-card">${form}</div>
-           </section>`
-        : `<section class="login-wrap">
-              <div class="login-art">${imgTag(IMG.tatreez)}<div class="login-art-in"><h2>${t('aArtH1')}<br><em>${t('aArtH2')}</em></h2><p>${t('aArtP')}</p></div></div>
-              <div class="login-panel">${form}</div>
-           </section>`;
+    let html;
+    if (isRegister) {
+        html = `
+        <section class="container reg-wrap">
+            ${checkList(['aB1', 'aB2', 'aB3'], 'reg-perks')}
+            <div class="reg-card">${form}</div>
+        </section>`;
+    } else {
+        html = `
+        <section class="login-wrap">
+            <div class="login-art">${imgTag(IMAGES.tatreez)}<div class="login-art-in"><h2>${t('aArtH1')}<br><em>${t('aArtH2')}</em></h2><p>${t('aArtP')}</p></div></div>
+            <div class="login-panel">${form}</div>
+        </section>`;
+    }
 
-    return {
-        html,
-        bind() {
-            $$('[data-pw]').forEach(btn => btn.onclick = () => {
+    function bind() {
+        // زر إظهار/إخفاء كلمة المرور
+        for (const btn of $$('[data-pw]')) {
+            btn.onclick = () => {
                 const input = btn.previousElementSibling;
-                const show = input.type === 'password';
-                input.type = show ? 'text' : 'password';
-                btn.textContent = show ? t('aHide') : t('aShow');
-            });
-
-            $('#a-form').onsubmit = async e => {
-                e.preventDefault();
-                const msg = $('#a-msg');
-                const data = Object.fromEntries(new FormData(e.target));
-                msg.textContent = '';
-
-                if (isRegister && data.password !== data.password2) { msg.textContent = t('aMismatch'); return; }
-                delete data.password2;
-
-                try {
-                    await api(isRegister ? 'register' : 'login', {}, data);
-                    await refreshState();
-
-                    const next = store.get('kn_next');
-                    store.set('kn_next', '');
-                    const dest = next || (S.user?.role === 'admin' ? 'admin/dashboard.html' : 'catalog.html');
-                    dest.startsWith('admin/') ? (location.href = U(dest)) : nav(dest);   // admin is a separate app
-                } catch (err) {
-                    msg.textContent = err.message;
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    btn.textContent = t('aHide');
+                } else {
+                    input.type = 'password';
+                    btn.textContent = t('aShow');
                 }
             };
         }
-    };
+
+        $('#a-form').onsubmit = async e => {
+            e.preventDefault();
+            const msg = $('#a-msg');
+            const data = Object.fromEntries(new FormData(e.target));
+            msg.textContent = '';
+
+            if (isRegister) {
+                if (data.password !== data.password2) {
+                    msg.textContent = t('aMismatch');
+                    return;
+                }
+                delete data.password2;   // السيرفر ما بحتاجها
+            }
+
+            try {
+                await api(mode.action, {}, data);
+                await refreshState();
+                goAfterLogin();
+            } catch (err) {
+                msg.textContent = err.message;
+            }
+        };
+    }
+
+    return { html: html, bind: bind };
+}
+
+function vLogin() {
+    return vAuth(false);
+}
+function vRegister() {
+    return vAuth(true);
+}
+
+/* ---------- الملف الشخصي ---------- */
+
+// الحروف الأولى من الاسم (أول حرفين) لعرضها بدل الصورة
+function getInitials(name) {
+    const words = String(name || 'K').trim().split(/\s+/);
+    let letters = '';
+    for (let i = 0; i < words.length && i < 2; i++) {
+        letters += words[i].charAt(0);
+    }
+    return letters.toUpperCase();
+}
+
+// صورة بالمعرض (bust = باراميتر عشان المتصفح ما يستخدم الصورة القديمة المخزّنة)
+function galleryFigure(path, date, bust = '') {
+    const day = String(date || '').slice(0, 10);
+    return `<figure><img src="${esc(imgSrc(path) + bust)}" alt="${t('prGalAlt')}"><figcaption>${esc(day)}</figcaption></figure>`;
+}
+
+// صورة الملف الشخصي (ونفس الدالة بتنستخدم بعد الرفع)
+function profileImg(path, bust = '') {
+    return `<img src="${esc(imgSrc(path) + bust)}" alt="${t('prPhotoAlt')}">`;
+}
+
+function profileDetail(labelKey, value, attrs = '') {
+    return `<div><span>${t(labelKey)}</span><strong ${attrs}>${esc(value)}</strong></div>`;
 }
 
 async function vProfile() {
-    if (!S.user) return { redirect: 'login.html' };
+    if (!currentUser) return { redirect: 'login.html' };
 
-    const [{ user: u = {} }, gallery] = await Promise.all([api('profile'), api('my-images')]);
-    const photos = gallery.items || [];
-    const initials = esc((u.name || 'K').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase());
+    const results = await Promise.all([api('profile'), api('my-images')]);
+    const u = results[0].user || {};
+    const photos = results[1].items || [];
 
-    const figure = (path, date, bust = '') =>
-        `<figure><img src="${esc(imgSrc(path) + bust)}" alt="${t('prGalAlt')}"><figcaption>${esc(String(date || '').slice(0, 10))}</figcaption></figure>`;
-    const detail = (label, value, attrs = '') => `<div><span>${t(label)}</span><strong ${attrs}>${esc(value)}</strong></div>`;
+    // الصورة الشخصية أو الحروف الأولى
+    let photoHtml = `<span>${esc(getInitials(u.name))}</span>`;
+    if (u.profile_image) photoHtml = profileImg(u.profile_image);
 
-    return {
-        html: `
+    let galleryHtml = `<p class="profile-gallery-empty">${t('prEmpty')}</p>`;
+    if (photos.length) {
+        galleryHtml = photos.map(p => galleryFigure(p.image_path, p.created_at)).join('');
+    }
+
+    const accept = IMAGE_TYPES.join(',');
+
+    const html = `
         <section class="container section profile-page">
             <div class="profile-heading"><span class="eyebrow">${t('fProfile')}</span><h1>${t('prH')}</h1><p>${t('prSub')}</p></div>
             <div class="profile-card">
                 <div class="profile-photo-wrap">
-                    <div class="profile-photo" id="profile-photo">${u.profile_image ? `<img src="${esc(imgSrc(u.profile_image))}" alt="${t('prPhotoAlt')}">` : `<span>${initials}</span>`}</div>
-                    <label class="btn btn-primary profile-upload">${t('prChoose')}<input id="profile-image" type="file" accept="${IMAGE_TYPES.join(',')}" hidden></label>
+                    <div class="profile-photo" id="profile-photo">${photoHtml}</div>
+                    <label class="btn btn-primary profile-upload">${t('prChoose')}<input id="profile-image" type="file" accept="${accept}" hidden></label>
                     <small>${t('prHint')}</small>
                     <div class="form-msg" id="profile-msg" role="status"></div>
                 </div>
                 <div class="profile-details">
-                    ${detail('prName', u.name || '')}
-                    ${detail('prEmail', u.email || '', 'dir="ltr"')}
-                    ${detail('prPhone', u.phone || t('prNone'))}
-                    ${detail('prSince', String(u.created_at || '').slice(0, 10))}
+                    ${profileDetail('prName', u.name || '')}
+                    ${profileDetail('prEmail', u.email || '', 'dir="ltr"')}
+                    ${profileDetail('prPhone', u.phone || t('prNone'))}
+                    ${profileDetail('prSince', String(u.created_at || '').slice(0, 10))}
                     <a class="btn btn-dark" href="${U('customer/orders.html')}">${t('fOrders')}</a>
                 </div>
             </div>
             <section class="profile-gallery">
                 <div class="profile-gallery-head">
                     <div><span class="eyebrow">${t('prGalEye')}</span><h2>${t('prGalH')}</h2><p>${t('prGalP')}</p></div>
-                    <label class="btn btn-dark">${t('prAdd')}<input id="gallery-image" type="file" accept="${IMAGE_TYPES.join(',')}" hidden></label>
+                    <label class="btn btn-dark">${t('prAdd')}<input id="gallery-image" type="file" accept="${accept}" hidden></label>
                 </div>
-                <div class="profile-gallery-grid" id="profile-gallery-grid">
-                    ${photos.map(p => figure(p.image_path, p.created_at)).join('') || `<p class="profile-gallery-empty">${t('prEmpty')}</p>`}
-                </div>
+                <div class="profile-gallery-grid" id="profile-gallery-grid">${galleryHtml}</div>
                 <div class="form-msg" id="gallery-msg" role="status"></div>
             </section>
-        </section>`,
+        </section>`;
 
-        bind() {
-            const profileMsg = $('#profile-msg');
-            bindUpload($('#profile-image'), profileMsg, 'profile-image', async res => {
-                $('#profile-photo').innerHTML =
-                    `<img src="${esc(imgSrc(res.profile_image) + '&v=' + Date.now())}" alt="${t('prPhotoAlt')}">`;
-                profileMsg.textContent = t('prSaved');
-                await refreshState();
-            });
+    function bind() {
+        // رفع الصورة الشخصية
+        const profileMsg = $('#profile-msg');
+        bindUpload($('#profile-image'), profileMsg, 'profile-image', async result => {
+            $('#profile-photo').innerHTML = profileImg(result.profile_image, '&v=' + Date.now());
+            profileMsg.textContent = t('prSaved');
+            await refreshState();
+        });
 
-            const galleryMsg = $('#gallery-msg');
-            bindUpload($('#gallery-image'), galleryMsg, 'user-image-upload', res => {
-                $('#profile-gallery-grid .profile-gallery-empty')?.remove();
-                $('#profile-gallery-grid').insertAdjacentHTML('afterbegin',
-                    figure(res.item.image_path, res.item.created_at, '&v=' + Date.now()));
-                galleryMsg.textContent = t('prGalDone');
-            });
-        }
-    };
+        // رفع صورة للمعرض
+        const galleryMsg = $('#gallery-msg');
+        bindUpload($('#gallery-image'), galleryMsg, 'user-image-upload', result => {
+            const emptyMsg = $('#profile-gallery-grid .profile-gallery-empty');
+            if (emptyMsg) emptyMsg.remove();
+
+            const figure = galleryFigure(result.item.image_path, result.item.created_at, '&v=' + Date.now());
+            $('#profile-gallery-grid').insertAdjacentHTML('afterbegin', figure);
+            galleryMsg.textContent = t('prGalDone');
+        });
+    }
+
+    return { html: html, bind: bind };
 }
 
-async function vStory() {
+/* ---------- حكايتنا ---------- */
+function vStory() {
     return {
         html: `
         <section class="s-hero container">
@@ -1114,15 +1584,10 @@ async function vStory() {
     };
 }
 
-/** Two buttons shared by the craft pages: shop this category / shop everything. */
-const craftButtons = categoryId => `
-    <div class="d-btns">
-        <a class="btn btn-primary" href="${U('catalog.html' + (categoryId ? '?category=' + categoryId : ''))}">${t('crShop')}</a>
-        <a class="btn btn-ghost" href="${U('catalog.html')}">${t('crAll')}</a>
-    </div>`;
-
+/* ---------- التطريز ---------- */
 async function vEmb() {
-    const { id, items } = await productsByCategory(/تطريز|embroid/i);
+    const category = await productsByCategory(/تطريز|embroid/i);
+
     return {
         html: `
         <section class="e-hero container">
@@ -1130,7 +1595,7 @@ async function vEmb() {
                 <span class="eyebrow">${t('eEye')}</span>
                 <h1>${t('eH1')}<br><em>${t('eH2')}</em></h1>
                 <p>${t('eLead')}</p>
-                ${craftButtons(id)}
+                ${craftButtons(category.id)}
             </div>
             <div class="e-motif" aria-hidden="true">
                 <svg viewBox="0 0 100 100"><g fill="none" stroke-linecap="round">
@@ -1143,103 +1608,158 @@ async function vEmb() {
             </div>
         </section>
         <div class="e-band" aria-hidden="true"></div>
-        <section class="container section e-motifs">${sec('', t('eM'))}<div class="e-cards">${cards('eM')}</div></section>
-        <section class="e-shop"><div class="container section">${sec('', t('eP'))}${productGrid(items, 'crNone')}</div></section>
-        <section class="e-care container section">${sec('', t('crCare'))}<div class="care">${cards('eC')}</div></section>`
+        <section class="container section e-motifs">${sectionHead('', t('eM'))}<div class="e-cards">${cards('eM')}</div></section>
+        ${shopSection('e-shop', '', t('eP'), category.items, 'crNone')}
+        ${careSection('e-care', 'eC')}`
     };
 }
 
+/* ---------- الفخار ---------- */
 async function vPot() {
-    const { id, items } = await productsByCategory(/فخار|خزف|سيراميك|pottery|ceramic/i);
-    const steps = [1, 2, 3, 4].map(i => `<li><h3>${t('pS' + i)}</h3><p>${t('pS' + i + 'p')}</p></li>`).join('');
+    const category = await productsByCategory(/فخار|خزف|سيراميك|pottery|ceramic/i);
+
     return {
         html: `
         <section class="po-hero container">
-            <div class="po-arch">${imgTag(IMG.ceramic)}</div>
+            <div class="po-arch">${imgTag(IMAGES.ceramic)}</div>
             <div class="po-copy">
-                <span class="eyebrow">${t('oPEye')}</span>
+                <span class="eyebrow">${t('eEye')}</span>
                 <h1>${t('pH1')}<br><em>${t('pH2')}</em></h1>
                 <p>${t('pLead')}</p>
-                ${craftButtons(id)}
+                ${craftButtons(category.id)}
             </div>
             <div class="po-wheel" aria-hidden="true"><i></i><i></i><i></i></div>
         </section>
-        <section class="po-steps container section">${sec('', t('pStepsH'))}<ol>${steps}</ol></section>
-        <section class="po-shop"><div class="container section">${sec('', t('pPP'))}${productGrid(items, 'crNone')}</div></section>
-        <section class="po-care container section">${sec('', t('crCare'))}<div class="care">${cards('pC')}</div></section>`
+        <section class="po-steps container section">${sectionHead('', t('pStepsH'))}<ol>${cards('pS', 'li', 4)}</ol></section>
+        ${shopSection('po-shop', '', t('pPP'), category.items, 'crNone')}
+        ${careSection('po-care', 'pC')}`
     };
 }
 
-/* ---------------------------------------------------------------------
-   8. Router, events & boot
---------------------------------------------------------------------- */
+
+/* =====================================================================
+   8) الراوتر والأحداث والتشغيل
+===================================================================== */
+
+// اسم الشاشة => دالة الصفحة (كل الدوال بتاخد params حتى لو ما بتستخدمها)
 const VIEWS = {
-    home: vHome, catalog: vCatalog, product: vProduct, cart: vCart, checkout: vCheckout,
-    receipt: vReceipt, myorders: vOrders, profile: vProfile, story: vStory,
-    embroidery: vEmb, pottery: vPot,
-    login: () => vAuth(false), register: () => vAuth(true)
+    home: vHome,
+    catalog: vCatalog,
+    product: vProduct,
+    cart: vCart,
+    checkout: vCheckout,
+    receipt: vReceipt,
+    myorders: vOrders,
+    profile: vProfile,
+    story: vStory,
+    embroidery: vEmb,
+    pottery: vPot,
+    login: vLogin,
+    register: vRegister
 };
 
+// اسم ملف الصفحة => اسم الشاشة
 const ROUTES = {
-    '': 'home', 'index.html': 'home', 'catalog.html': 'catalog', 'product-detail.html': 'product',
-    'cart.html': 'cart', 'checkout.html': 'checkout', 'login.html': 'login', 'register.html': 'register',
-    'order-receipt.html': 'receipt', 'embroidery.html': 'embroidery', 'pottery.html': 'pottery',
-    'story.html': 'story', 'customer/orders.html': 'myorders', 'customer/profile.html': 'profile'
+    '': 'home',
+    'index.html': 'home',
+    'catalog.html': 'catalog',
+    'product-detail.html': 'product',
+    'cart.html': 'cart',
+    'checkout.html': 'checkout',
+    'login.html': 'login',
+    'register.html': 'register',
+    'order-receipt.html': 'receipt',
+    'embroidery.html': 'embroidery',
+    'pottery.html': 'pottery',
+    'story.html': 'story',
+    'customer/orders.html': 'myorders',
+    'customer/profile.html': 'profile'
 };
 
-/** Pages that keep the "go here after login" target alive. */
+// الصفحات اللي بنبقي فيها "وين نرجع بعد الدخول" (kn_next)
 const KEEP_NEXT = ['login', 'register', 'checkout', 'receipt', 'myorders', 'profile'];
 
-const routeOf = url =>
-    ROUTES[decodeURIComponent(url.pathname.slice(new URL(BASE).pathname.length)).toLowerCase()];
+// نحوّل الرابط لاسم شاشة: نقص مسار المشروع ونبحث عن الباقي بالجدول
+function routeOf(url) {
+    const basePath = new URL(BASE).pathname;
+    const filePath = decodeURIComponent(url.pathname.slice(basePath.length)).toLowerCase();
+    return ROUTES[filePath];
+}
 
-let app;
-let renderToken = 0;
-let lastPath = '';
+let app;               // عنصر #app
+let renderToken = 0;   // رقم لكل عملية رسم (عشان نتجاهل القديمة)
+let lastPath = '';     // آخر مسار انرسم
 
+// تنقّل بدون إعادة تحميل الصفحة
 function go(url) {
     history.pushState(null, '', url);
     render(true);
 }
-const nav = path => go(new URL(U(path)));
+function nav(path) {
+    go(new URL(U(path)));
+}
 
+// رسم الصفحة الحالية
+// soft = true: تنقل داخلي (بنخلي الصفحة القديمة ظاهرة لحد ما الجديدة تجهز)
+// soft = false: أول تحميل (بنعرض "جاري التحميل")
 async function render(soft = false) {
-    const url  = new URL(location.href);
+    const url = new URL(location.href);
     const page = routeOf(url) || 'home';
-    const mine = ++renderToken;
-    const pathChanged = !!lastPath && lastPath !== url.pathname;
+
+    renderToken++;
+    const myToken = renderToken;
+    const pathChanged = lastPath !== '' && lastPath !== url.pathname;
 
     document.body.dataset.page = page;
     document.title = 'KANAAN | ' + t('ttl_' + page);
-    if (!KEEP_NEXT.includes(page)) store.set('kn_next', '');
-    paintNav();
-    $('#main-nav')?.classList.remove('open');
-    $('#menu-toggle')?.setAttribute('aria-expanded', 'false');
 
-    // Keep the current page visible while the next one is prepared.
-    if (soft) app.classList.add('page-changing');
-    else if (!app.innerHTML.trim()) app.innerHTML = `<div class="container loading">${t('loading')}</div>`;
+    // إذا الصفحة مش من اللي بتحتاج "ارجع بعد الدخول" نمسح المحفوظ
+    if (!KEEP_NEXT.includes(page)) storeSet('kn_next', '');
+
+    paintNav();
+    $('#main-nav').classList.remove('open');
+    $('#menu-toggle').setAttribute('aria-expanded', 'false');
+
+    if (soft) {
+        app.classList.add('page-changing');
+    } else if (!app.innerHTML.trim()) {
+        app.innerHTML = `<div class="container loading">${t('loading')}</div>`;
+    }
 
     try {
         const view = await VIEWS[page](url.searchParams);
-        if (mine !== renderToken) return;                // a newer navigation took over
 
+        // المستخدم انتقل لصفحة ثانية قبل ما تخلص هاي: نتجاهلها
+        if (myToken !== renderToken) return;
+
+        // الصفحة طلبت تحويل (مثلاً السلة فاضية)
         if (view.redirect) {
-            history.replaceState(null, '', U(view.redirect));
+            history.replaceState(null, '', U(view.redirect));   // replace مش push عشان زر الرجوع ما يرجّع للصفحة المحوَّلة
             return render(true);
         }
 
         app.innerHTML = view.html;
         app.classList.remove('page-changing', 'in');
-        void app.offsetWidth;                            // restart the CSS animation
+        void app.offsetWidth;   // حيلة لإعادة تشغيل أنيميشن الـ CSS
         app.classList.add('in');
-        view.bind?.();
+
+        if (view.bind) view.bind();   // ربط الأزرار (bind اختيارية)
         lastPath = url.pathname;
 
-        if (url.hash) requestAnimationFrame(() => $(url.hash)?.scrollIntoView({ behavior: 'smooth' }));
-        else if (pathChanged || !soft) window.scrollTo({ top: 0, behavior: soft ? 'smooth' : 'auto' });
+        // السكرول
+        if (url.hash) {
+            requestAnimationFrame(() => {
+                const target = $(url.hash);
+                if (target) target.scrollIntoView({ behavior: 'smooth' });
+            });
+        } else if (pathChanged || !soft) {
+            let behavior = 'auto';
+            if (soft) behavior = 'smooth';
+            window.scrollTo({ top: 0, behavior: behavior });
+        }
     } catch (e) {
-        if (mine !== renderToken) return;
+        if (myToken !== renderToken) return;
+
         app.classList.remove('page-changing');
         app.innerHTML = `
             <section class="container"><div class="notice">
@@ -1250,64 +1770,106 @@ async function render(soft = false) {
     }
 }
 
-/* One delegated click handler for the whole app */
+/* ---------- معالج النقر الموحّد ----------
+   مستمع واحد على الصفحة كلها بدل مستمع لكل زر (event delegation)
+   closest() بتطلع للعنصر الأب الأقرب اللي بطابق الـ selector
+   (مفيد لأنه النقر ممكن يكون على svg جوّا الزر مش الزر نفسه)
+------------------------------------------------ */
 document.addEventListener('click', e => {
-    const hit = sel => e.target.closest(sel);
+    function hit(selector) {
+        return e.target.closest(selector);
+    }
 
-    if (hit('#lang-btn')) return setLang(S.lang === 'ar' ? 'en' : 'ar');
+    // زر اللغة
+    if (hit('#lang-btn')) {
+        if (isArabic()) {
+            setLang('en');
+        } else {
+            setLang('ar');
+        }
+        return;
+    }
 
+    // زر القائمة (موبايل)
     const menuBtn = hit('#menu-toggle');
     if (menuBtn) {
-        const open = $('#main-nav').classList.toggle('open');
-        menuBtn.setAttribute('aria-expanded', open);
-        menuBtn.innerHTML = open ? IC.close : IC.menu;
+        const isOpen = $('#main-nav').classList.toggle('open');
+        menuBtn.setAttribute('aria-expanded', isOpen);
+        menuBtn.innerHTML = isOpen ? ICONS.close : ICONS.menu;
         return;
     }
 
-    const acctBtn = hit('#acct-btn');
-    if (acctBtn) {
+    // زر قائمة الحساب
+    const accountBtn = hit('#acct-btn');
+    if (accountBtn) {
         const menu = $('#acct-menu');
         menu.hidden = !menu.hidden;
-        acctBtn.setAttribute('aria-expanded', String(!menu.hidden));
+        accountBtn.setAttribute('aria-expanded', String(!menu.hidden));
         return;
     }
 
+    // تسجيل الخروج
     if (hit('#logout')) {
         (async () => {
-            try { await api('logout', {}, {}); } catch {}
+            try { await api('logout', {}, {}); } catch (err) { }
             await refreshState();
             nav('index.html');
         })();
         return;
     }
 
-    if (!hit('#acct')) { const menu = $('#acct-menu'); if (menu) menu.hidden = true; }
+    // نقر برا قائمة الحساب: نسكّرها
+    if (!hit('#acct')) {
+        const menu = $('#acct-menu');
+        if (menu) menu.hidden = true;
+    }
 
+    // زر "أضف للسلة" السريع
     const addBtn = hit('[data-add]');
-    if (addBtn) return addToCart(addBtn.dataset.add);
+    if (addBtn) {
+        addToCart(addBtn.dataset.add);
+        return;
+    }
 
+    // أزرار + و - بصفحة المنتج
     const stepBtn = hit('[data-step]');
     if (stepBtn) {
         const input = $('input', stepBtn.parentElement);
         const max = +input.max || 99;
-        input.value = Math.min(max, Math.max(1, (parseInt(input.value, 10) || 1) + +stepBtn.dataset.step));
+        const current = parseInt(input.value, 10) || 1;
+        input.value = Math.min(max, Math.max(1, current + +stepBtn.dataset.step));
         return;
     }
 
-    if (hit('[data-print]')) return window.print();
+    // زر الطباعة (طباعة المتصفح، ومنها "حفظ كـ PDF")
+    if (hit('[data-print]')) {
+        window.print();
+        return;
+    }
 
-    // Internal links navigate without reloading the page.
+    // الروابط الداخلية: بننتقل بين الصفحات بدون إعادة تحميل (SPA)
     const link = hit('a[href]');
-    if (!link || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || link.target === '_blank') return;
+    if (!link) return;
+
+    // حالات بنخلي فيها المتصفح يتصرف عادي: نقر غير أيسر، Ctrl/Cmd/Shift (تبويب جديد)، target=_blank
+    if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || link.target === '_blank') return;
+
     const url = new URL(link.href, location.href);
+
+    // رابط خارجي أو صفحة مش معروفة بالراوتر: المتصفح يتعامل معه
     if (url.origin !== location.origin || !routeOf(url)) return;
+
+    // رابط # بنفس الصفحة: خلي المتصفح يعمل scroll عادي
     if (url.hash && url.pathname === location.pathname && url.search === location.search) return;
+
     e.preventDefault();
     go(url);
 });
 
+// زر الرجوع/الأمام بالمتصفح
 addEventListener('popstate', () => render(true));
 
+/* ---------- التشغيل ---------- */
 async function boot() {
     app = $('#app');
     applyDocumentLang();
